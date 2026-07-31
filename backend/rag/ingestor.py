@@ -79,7 +79,10 @@ def fetch_sheet_rows(csv_url: str = FAQ_SHEET_CSV_URL):
     """Downloads the FAQ Google Sheet and yields (category, question, answer) for every usable row."""
     response = requests.get(csv_url, timeout=30)
     response.raise_for_status()
-    reader = csv.reader(io.StringIO(response.text))
+    # requests defaults text/csv to Latin-1 when no charset is declared in the response
+    # headers, mangling multi-byte UTF-8 characters (em dashes, curly quotes, etc.) from
+    # the sheet. Google's CSV export is UTF-8, so decode it explicitly.
+    reader = csv.reader(io.StringIO(response.content.decode("utf-8")))
 
     header = None
     for row in reader:
