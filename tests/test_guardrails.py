@@ -78,6 +78,17 @@ def test_numerical_hallucination_allows_constants():
     assert triggered is False
 
 
+def test_numerical_hallucination_ignores_list_markers():
+    # "1." / "2." are ordered-list markers, not facts — they shouldn't need to appear
+    # in the source chunks to avoid a false "unverified numbers" warning.
+    chunks = [make_chunk("Ceilings can be measured if fully visible.")]
+    response, triggered = check_numerical_hallucination(
+        "1. The surface must be fully visible.\n2. This applies to ceilings too. [Source: Basic]",
+        chunks,
+    )
+    assert triggered is False
+
+
 def test_fallback_leakage_strips_prepended_commentary():
     leaked = (
         "Geometra doesn't mention this specific case in its documentation. " + FALLBACK_MESSAGE
@@ -97,3 +108,15 @@ def test_fallback_leakage_leaves_normal_response_alone():
     response, triggered = check_fallback_leakage("The price is 399 per wall. [Source: Pricing]")
     assert triggered is False
     assert "399" in response
+
+
+def test_fallback_leakage_catches_newline_variant():
+    # The LLM sometimes puts a newline where the fallback constant has a plain space —
+    # a literal substring match misses this, letting the model's own commentary through.
+    leaked = (
+        "Measuring a swimming pool is not explicitly mentioned in the context.\n"
+        + FALLBACK_MESSAGE.replace(" You can", "\nYou can")
+    )
+    response, triggered = check_fallback_leakage(leaked)
+    assert triggered is True
+    assert response == FALLBACK_MESSAGE

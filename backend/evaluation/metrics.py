@@ -9,15 +9,10 @@ from config import (
     MIN_COMPLETENESS_WORDS,
 )
 from database import get_cursor
-from llm.guardrails import BANNED_PHRASES
+from llm.guardrails import BANNED_PHRASES, _extract_numbers
 from models import EvaluationResult, SourceChunk
 
-NUMBER_RE = re.compile(r"\d+(?:\.\d+)?")
 CITATION_RE = re.compile(r"\[Source:\s*([^\]]+)\]")
-
-
-def _extract_numbers(text: str) -> List[float]:
-    return [float(n) for n in NUMBER_RE.findall(text)]
 
 
 def _result(metric_name: str, passed: bool, score: Optional[float], detail: str) -> EvaluationResult:

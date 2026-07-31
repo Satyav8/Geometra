@@ -20,10 +20,19 @@ BANNED_PHRASES = [
 # LLM hedging), so it false-positived on one of the most common customer questions.
 
 NUMBER_RE = re.compile(r"\d+(?:\.\d+)?")
+# Ordered-list markers ("1. ", "2. " at the start of a line) look like numbers to NUMBER_RE
+# but aren't facts — strip them before extracting numbers, or every numbered-list answer
+# false-positives the hallucination check.
+LIST_MARKER_RE = re.compile(r"^\s*\d+\.\s+", re.MULTILINE)
 
 
 def _extract_numbers(text: str) -> List[float]:
+    text = LIST_MARKER_RE.sub("", text)
     return [float(n) for n in NUMBER_RE.findall(text)]
+
+
+def _normalize_whitespace(text: str) -> str:
+    return re.sub(r"\s+", " ", text).strip()
 
 
 def check_numerical_hallucination(
@@ -71,9 +80,11 @@ def check_uncertainty_language(response: str) -> Tuple[str, bool]:
 
 def check_fallback_leakage(response: str) -> Tuple[str, bool]:
     """Rule 2 requires the fallback to be the ENTIRE response. If the model prepends its
-    own commentary before the exact fallback sentence, strip everything but the fallback."""
+    own commentary before the exact fallback sentence, strip everything but the fallback.
+    Whitespace-normalized comparison: the model sometimes uses a newline where the fallback
+    constant has a plain space, which would otherwise defeat a literal substring match."""
     if response.strip() == FALLBACK_MESSAGE:
         return response, False
-    if FALLBACK_MESSAGE in response:
+    if _normalize_whitespace(FALLBACK_MESSAGE) in _normalize_whitespace(response):
         return FALLBACK_MESSAGE, True
     return response, False
