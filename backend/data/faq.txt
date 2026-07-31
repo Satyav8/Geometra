@@ -1,0 +1,115 @@
+## Section: Product Overview
+
+Q: What is Geometra, in one line?
+A: Geometra is an image-to-CAD system that allows you to measure your space, such as wall elevations, directly from photos taken with your phone by following the system's provided instructions.
+
+Q: How does it actually work — step by step?
+A: Place Marker: Put the Geometra marker on any surface to create a reference point. Take Photo: Take a photo where you can clearly see the wall edges and at least three corners. Measure: Instantly measure the wall through Geometra's interface, supported by robust backend processing and precise accuracy.
+
+## Section: Hardware Requirements
+
+Q: Do I need any special hardware, scanner, or laser device?
+A: Printing the Marker: A laser printer is preferred. Be sure to follow the instructions, keep in portrait mode and maintain a custom scaling of 100%. Taking Photos: No specialized camera or high-end smartphone is required; any standard phone will work. Geometra Interface: Since Geometra is a web-based application, it can be used on any standard PC, laptop, or desktop computer.
+
+## Section: Web App
+
+Q: Do I have to download an app, or does it work in a browser?
+A: Geometra functions completely as a web-based application without any necessary downloads, allowing it to be utilized on any standard desktop computer, laptop, or PC.
+
+## Section: Output Formats
+
+Q: What do I get at the end — what does the output look like?
+A: Wall elevations are provided in both PDF and DXF formats. Image measurements are delivered in PNG and PDF formats.
+
+## Section: Measurement Scope
+
+Q: Is this a floor-plan tool or an elevations tool (or both)?
+A: Geometra functions as an elevations tool, providing wall elevations with a precision of 99%+.
+
+Q: Can I measure a whole room, or is it one wall at a time?
+A: With the Geometra elevation version, measurements are taken one wall at a time.
+
+Q: Can I measure ceilings and floors, or only walls?
+A: We can measure what is visible, so if any space that you wish to measure is fully visible in the photograph.
+
+## Section: Accuracy
+
+Q: How accurate is it, really? What does "99% accurate" mean in mm?
+A: Right from your first image capture, Geometra ensures an accuracy of 99%+. For instance, a 1000mm measurement in length or width might have a variance of + or - 10mm.
+
+Q: Can I trust these measurements for real client work / fabrication?
+A: With an accuracy rate of over 99%, Geometra provides dependable measurements that can be safely relied upon for professional client projects and fabrication.
+
+Q: What happens if a measurement is wrong — can I verify it?
+A: Geometra ensures an accuracy of 99%+. You can verify the measurements by measuring tape or a laser manually.
+
+Q: When does accuracy drop (lighting, angle, distance)?
+A: Ensure the Geometra marker is applied flatly without any folds, creases, or bumps, and that all four corners are securely adhered. When capturing the image, verify that wall edges are distinct and a minimum of three corners are framed properly. We can only measure what is visible, so confirm that any target element you wish to measure is fully visible in the photograph.
+
+## Section: Verification
+
+Q: Has it been tested against a laser measure or a real survey?
+A: Yes, we have rigorously tested and verified our tool with laser measure in a real survey.
+
+## Section: Marker Usage
+
+Q: What's the largest / smallest wall it can measure accurately?
+A: Various sizes of Geometra markers are available to suit different wall dimensions: A5 size, tailored for highly confined areas (e.g., washbasins); A4 size, the standard option widely utilized for typical home and office walls; A3 size, designed for larger surfaces such as clubhouses and warehouses.
+
+Q: What is the marker and why do I need it?
+A: The Geometra Marker is the essential reference point that unlocks professional-grade precision. By simply placing the marker, Geometra instantly allows you to measure the whole wall with a single photo.
+
+Q: How do I print it — any printer model, any paper size quality?
+A: A laser printer is preferred. Be sure to follow the instructions, keep in portrait mode and maintain a custom scaling of 100%.
+
+Q: Where exactly do I place it, and does placement affect accuracy?
+A: You can position the marker anywhere on the wall, as its placement does not affect the measurement accuracy.
+
+Q: Can I start before the physical marker kit arrives? If yes, how?
+A: The Geometra marker is required to start the measurement process, and it can be printed directly from the marker section.
+
+Q: Can I reuse a marker, or do I need a new one each time?
+A: The marker can be used repeatedly as long as it does not become bent, folded, or torn.
+
+Q: What if the marker is slightly bent / dirty? Do I need to buy a new one?
+A: Replace the marker when the marker is bent, folded or torn.
+
+## Section: Photo Requirements
+
+Q: How many corners/edges of the wall need to be visible?
+A: For example, if you are photographing a rectangular wall, you must ensure at least three of its corners are clearly visible in your photo for the system to process the measurement.
+
+## Section: Pricing
+
+Q: How much does it cost?
+A: We are priced at 399/- per wall (with all measurements and DXF elevation).
+
+Q: What's included in the Free plan, and what are its limits? Tell me all plans.
+A: Free Plan: Measure up to 3 wall elevations and download them with no strings attached. Paid Plan: A single simple plan priced at 399/- per wall elevation.
+
+Q: Is there a free trial, before I pay?
+A: Yes there is a free trial. Measure up to 3 wall elevations and download them with no strings attached.
+
+## Section: Refund Policy
+
+Q: Can I get a refund if a scan fails or a measurement is wrong?
+A: Refer to our refund policy.
+
+## Section: Data & Privacy
+
+Q: What happens to the photos I upload — are they stored?
+A: The images will be stored and processed according to our privacy and data policy.
+
+Q: Where is the data hosted, is it secure & compliant with data-protection rules?
+A: All data is securely stored in an S3 bucket, ensuring complete safety and full compliance with all data protection rules and regulations.
+
+## Section: Sign-up & Onboarding
+
+Q: How do I sign up?
+A: You can sign up using Google, Apple ID, or your email and phone number.
+
+Q: Is there a tutorial or onboarding guide?
+A: We offer a gamified tutorial to help you get started with Geometra, and for further assistance, we provide training and illustration videos.
+
+Q: Is there training or certification needed for the user?
+A: No formal training is required; you can simply complete the Geometra tutorial to start using the tool.

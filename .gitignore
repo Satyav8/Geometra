@@ -1,0 +1,19 @@
+.env
+__pycache__/
+*.pyc
+venv/
+.venv/
+backend/data/chroma_db/
+backend/geometra_chat.db
+*.db
+node_modules/
+dist/
+.DS_Store
+.pytest_cache/
+~$*
+
+# Internal planning/analysis docs - not for the repo
+.claude/
+SYSTEM_OVERVIEW.md
+Geometra_Chatbot_System_Report.docx
+Geometra_Migration_Plan.xlsx
