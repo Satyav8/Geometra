@@ -32,6 +32,7 @@ from integrations.supabase_client import write_escalated_question
 from models import ChatRequest, ChatResponse, SourceChunk
 from rag.relevance import compute_criticality, is_gratitude, is_query_relevant
 from rag.retriever import retrieve
+from rag.spelling import correct_query
 
 router = APIRouter()
 
@@ -54,20 +55,25 @@ def chat(request: ChatRequest) -> ChatResponse:
 
     ensure_session(request.session_id)
 
+    # Typo-corrected text drives retrieval/relevance/the LLM prompt (a misspelled word
+    # can otherwise tank embedding similarity or miss a keyword match); the customer's
+    # original raw text is still what gets stored/escalated, so records stay verbatim.
+    query = correct_query(request.query)
+
     sources: List[SourceChunk] = []
     input_tokens = 0
     output_tokens = 0
     is_unknown_question = False
 
-    if is_gratitude(request.query):
+    if is_gratitude(query):
         # Courtesy close — no need to hit retrieval or the LLM for this.
         chunks = []
         confidence_level = "high"
         is_relevant = True
         response = GRATITUDE_MESSAGE
     else:
-        chunks, confidence_level = retrieve(request.query)
-        is_relevant = is_query_relevant(request.query)
+        chunks, confidence_level = retrieve(query)
+        is_relevant = is_query_relevant(query)
 
         if confidence_level == "unknown":
             if is_relevant:
@@ -79,7 +85,7 @@ def chat(request: ChatRequest) -> ChatResponse:
                 response = OUT_OF_SCOPE_MESSAGE
         else:
             sources = chunks
-            user_message = build_user_message(request.query, chunks, confidence_level)
+            user_message = build_user_message(query, chunks, confidence_level)
             response, input_tokens, output_tokens = call_llm(SYSTEM_PROMPT, user_message)
 
             response, _ = check_fallback_leakage(response)
@@ -96,7 +102,7 @@ def chat(request: ChatRequest) -> ChatResponse:
     response_latency_ms = int((time.time() - start_time) * 1000)
 
     evaluation = evaluate_core_metrics(
-        query=request.query,
+        query=query,
         response=response,
         chunks=chunks,
         confidence_level=confidence_level,
