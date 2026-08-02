@@ -1,8 +1,8 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from config import CORS_ORIGINS, CHROMA_PERSIST_DIR, CHROMA_COLLECTION
-from database import init_db, get_connection
+from config import CORS_ORIGINS, CHROMA_PERSIST_DIR, CHROMA_COLLECTION, DATABASE_BACKEND
+from database import init_db, check_health
 from routers import chat, session, unknown
 
 app = FastAPI(title="Geometra Pre-Prototype Chatbot")
@@ -27,13 +27,7 @@ def startup():
 
 @app.get("/health")
 def health():
-    sqlite_status = "ok"
-    try:
-        conn = get_connection()
-        conn.execute("SELECT 1")
-        conn.close()
-    except Exception:
-        sqlite_status = "error"
+    db_status = "ok" if check_health() else "error"
 
     chroma_status = "ok"
     try:
@@ -48,7 +42,7 @@ def health():
     except Exception:
         chroma_status = "error"
 
-    return {"status": "ok", "chroma": chroma_status, "sqlite": sqlite_status}
+    return {"status": "ok", "chroma": chroma_status, "database": db_status, "database_backend": DATABASE_BACKEND}
 
 
 @app.get("/ingest-status")

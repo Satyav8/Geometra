@@ -8,7 +8,7 @@ from config import (
     LOW_CONFIDENCE_THRESHOLD,
     MIN_COMPLETENESS_WORDS,
 )
-from database import get_cursor
+from database import count_session_messages, get_message_by_id, get_session_message_flags
 from llm.guardrails import BANNED_PHRASES, _extract_numbers
 from models import EvaluationResult, SourceChunk
 
@@ -98,13 +98,11 @@ def response_conciseness(response: str) -> EvaluationResult:
 
 
 def fallback_trigger_rate(session_id: str) -> EvaluationResult:
-    with get_cursor() as cur:
-        cur.execute("SELECT is_unknown_question FROM messages WHERE session_id = ?", (session_id,))
-        rows = cur.fetchall()
-    total = len(rows)
+    flags = get_session_message_flags(session_id)
+    total = len(flags)
     if total == 0:
         return _result("fallback_trigger_rate", True, 0.0, "No prior messages in session")
-    unknown_count = sum(1 for r in rows if r["is_unknown_question"])
+    unknown_count = sum(1 for f in flags if f)
     ratio = round(unknown_count / total, 4)
     passed = ratio <= 0.15
     return _result("fallback_trigger_rate", passed, ratio, f"{unknown_count}/{total} prior turns were unknown ({ratio})")
@@ -157,10 +155,7 @@ def tone_consistency(response: str) -> EvaluationResult:
 def multi_turn_coherence(session_id: str, turn_number: int) -> EvaluationResult:
     if turn_number <= 1:
         return _result("multi_turn_coherence", True, None, "First turn — not applicable")
-    with get_cursor() as cur:
-        cur.execute("SELECT COUNT(*) as cnt FROM messages WHERE session_id = ?", (session_id,))
-        row = cur.fetchone()
-    count = row["cnt"] if row else 0
+    count = count_session_messages(session_id)
     passed = count >= turn_number - 1
     return _result("multi_turn_coherence", passed, float(count), f"Expected >= {turn_number - 1} prior messages, found {count}")
 
@@ -180,9 +175,7 @@ def out_of_scope_rejection(confidence_level: str, is_relevant: bool, response: s
 
 
 def sqlite_log_integrity(message_id: int, expected: Dict) -> EvaluationResult:
-    with get_cursor() as cur:
-        cur.execute("SELECT * FROM messages WHERE id = ?", (message_id,))
-        row = cur.fetchone()
+    row = get_message_by_id(message_id)
     if row is None:
         return _result("sqlite_log_integrity", False, None, "Message record not found after write")
     mismatches = []

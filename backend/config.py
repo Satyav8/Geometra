@@ -29,10 +29,15 @@ FAQ_SHEET_CSV_URL = (
 # Evaluation
 MIN_COMPLETENESS_WORDS = int(os.getenv("MIN_COMPLETENESS_WORDS", "8"))
 
-# Database
+# Database — "sqlite" (default, local dev/tests) or "supabase" (production).
+# Kept separate on purpose: local dev/test runs should never write into the real
+# Supabase project (see the escalated_questions mixing issue we hit earlier).
+DATABASE_BACKEND = os.getenv("DATABASE_BACKEND", "sqlite")
 SQLITE_DB_PATH = os.getenv("SQLITE_DB_PATH", "./geometra_chat.db")
 
-# Supabase — escalated (relevant-but-unknown) questions get written here for the team
+# Supabase — same project already used for escalated_questions. Also the main
+# database (sessions/messages/evaluation_logs/unknown_questions) when
+# DATABASE_BACKEND=supabase.
 SUPABASE_URL = os.getenv("SUPABASE_URL", "")
 SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
 
