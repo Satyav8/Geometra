@@ -68,7 +68,8 @@ def chat(request: ChatRequest) -> ChatResponse:
     output_tokens = 0
     is_unknown_question = False
 
-    if is_gratitude(query):
+    is_gratitude_turn = is_gratitude(query)
+    if is_gratitude_turn:
         # Courtesy close — no need to hit retrieval or the LLM for this.
         chunks = []
         confidence_level = "high"
@@ -134,8 +135,10 @@ def chat(request: ChatRequest) -> ChatResponse:
         )
 
     # Metrics above evaluate the substantive answer only; this check-in nudge is UX,
-    # appended after so it doesn't skew hallucination/citation/etc. scoring.
-    is_check_in_turn = request.turn_number == ESCALATION_TURN_THRESHOLD
+    # appended after so it doesn't skew hallucination/citation/etc. scoring. Skipped on
+    # a gratitude turn — "thank you" already implies the query is resolved, so asking
+    # "has this resolved your query?" right after is contradictory.
+    is_check_in_turn = request.turn_number == ESCALATION_TURN_THRESHOLD and not is_gratitude_turn
     if is_check_in_turn:
         response = response + CHECK_IN_MESSAGE
 

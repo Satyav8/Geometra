@@ -81,10 +81,14 @@ OUT_OF_SCOPE_MESSAGE = "I can only help with questions about Geometra."
 
 # Shown instead of the generic fallback once a ticket has actually been raised for the
 # customer's question (see routers/chat.py) — ticket_number is filled in at request time.
+# The email button shown alongside this is a manual backup only (a mailto: draft the
+# customer can optionally send themselves) — the ticket and team notification already
+# happened automatically before this message is even shown, so the wording here must not
+# imply the customer needs to click anything for the ticket to exist.
 TICKET_RAISED_MESSAGE = (
-    "I don't have enough information about the question that you have asked. "
-    "I've raised a support ticket ({ticket_number}) for our team — they'll get back "
-    "to you within 12-24 hours."
+    "I've created a support ticket ({ticket_number}) on your behalf for the Geometra "
+    "team — they'll get back to you within 12-24 hours. If you'd also like to email us "
+    "directly, you can use the button below."
 )
 
 GRATITUDE_MESSAGE = "Most welcome! I'm here to assist you if there are any further doubts."
