@@ -2,12 +2,11 @@ import csv
 import io
 import re
 
-import chromadb
 import requests
-from chromadb.config import Settings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
-from config import CHROMA_PERSIST_DIR, CHROMA_COLLECTION, FAQ_SHEET_CSV_URL
+from config import FAQ_SHEET_CSV_URL
+from rag import vectorstore
 from rag.embedder import embed_batch
 
 SECTION_HEADER_RE = re.compile(r"^##\s*Section:\s*(.+?)\s*$", re.MULTILINE)
@@ -55,23 +54,7 @@ def _store_chunks(rows) -> int:
             counter += 1
 
     embeddings = embed_batch(chunk_texts)
-
-    client = chromadb.PersistentClient(
-        path=CHROMA_PERSIST_DIR, settings=Settings(anonymized_telemetry=False)
-    )
-    try:
-        client.delete_collection(CHROMA_COLLECTION)
-    except Exception:
-        pass
-    collection = client.create_collection(CHROMA_COLLECTION, metadata={"hnsw:space": "cosine"})
-
-    collection.add(
-        ids=chunk_ids,
-        embeddings=embeddings,
-        documents=chunk_texts,
-        metadatas=chunk_metadatas,
-    )
-
+    vectorstore.recreate_and_store(chunk_ids, embeddings, chunk_texts, chunk_metadatas)
     return len(chunk_ids)
 
 

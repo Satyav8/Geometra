@@ -13,11 +13,21 @@ LLM_MODEL = os.getenv("LLM_MODEL", "llama-3.3-70b-versatile")
 
 # RAG — local embedding model (no API key / credits required)
 EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "sentence-transformers/all-MiniLM-L6-v2")
-CHROMA_PERSIST_DIR = os.getenv("CHROMA_PERSIST_DIR", "./data/chroma_db")
-CHROMA_COLLECTION = os.getenv("CHROMA_COLLECTION", "geometra_faq")
+EMBEDDING_DIM = 384  # sentence-transformers/all-MiniLM-L6-v2 output size
 TOP_K_CHUNKS = int(os.getenv("TOP_K_CHUNKS", "5"))
 MIN_SIMILARITY_SCORE = float(os.getenv("MIN_SIMILARITY_SCORE", "0.30"))
 LOW_CONFIDENCE_THRESHOLD = float(os.getenv("LOW_CONFIDENCE_THRESHOLD", "0.60"))
+
+# Vector DB — "chroma" (default, local dev/tests) or "qdrant" (production). Same
+# reasoning as DATABASE_BACKEND: local dev/tests stay fast and offline.
+VECTOR_DB_BACKEND = os.getenv("VECTOR_DB_BACKEND", "chroma")
+CHROMA_PERSIST_DIR = os.getenv("CHROMA_PERSIST_DIR", "./data/chroma_db")
+CHROMA_COLLECTION = os.getenv("CHROMA_COLLECTION", "geometra_faq")
+
+# Qdrant Cloud — used only when VECTOR_DB_BACKEND=qdrant.
+QDRANT_URL = os.getenv("QDRANT_URL", "")
+QDRANT_API_KEY = os.getenv("QDRANT_API_KEY", "")
+QDRANT_COLLECTION = os.getenv("QDRANT_COLLECTION", "geometra_faq")
 
 # FAQ knowledge base — live Google Sheet is the source of truth (team keeps adding rows)
 FAQ_SHEET_ID = os.getenv("FAQ_SHEET_ID", "1dkd0Qj-6kTc72eXk0UCGFi47RrEP0fiKRAK-jPrFMtA")
