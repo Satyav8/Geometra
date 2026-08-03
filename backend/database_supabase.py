@@ -74,10 +74,12 @@ def write_message(
     return resp.json()[0]["id"]
 
 
-def write_unknown_question(session_id: str, query: str, similarity_score: float) -> None:
-    headers = {**BASE_HEADERS, "Prefer": "return=minimal"}
+def write_unknown_question(session_id: str, query: str, similarity_score: float) -> int:
+    headers = {**BASE_HEADERS, "Prefer": "return=representation"}
     payload = {"session_id": session_id, "query": query, "similarity_score": similarity_score}
-    requests.post(_url("unknown_questions"), headers=headers, json=payload, timeout=10)
+    resp = requests.post(_url("unknown_questions"), headers=headers, json=payload, timeout=10)
+    resp.raise_for_status()
+    return resp.json()[0]["id"]
 
 
 def write_evaluation_logs(message_id: int, results) -> None:

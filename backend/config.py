@@ -41,6 +41,13 @@ SQLITE_DB_PATH = os.getenv("SQLITE_DB_PATH", "./geometra_chat.db")
 SUPABASE_URL = os.getenv("SUPABASE_URL", "")
 SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
 
+# Resend — sends the automated ticket email (with full conversation transcript) to
+# SUPPORT_EMAIL whenever a question is escalated. Free tier can send to the account's
+# own verified email without domain verification, which is why RESEND_FROM_EMAIL
+# defaults to Resend's shared test domain rather than a custom one.
+RESEND_API_KEY = os.getenv("RESEND_API_KEY", "")
+RESEND_FROM_EMAIL = os.getenv("RESEND_FROM_EMAIL", "S.A.M <onboarding@resend.dev>")
+
 # Server
 BACKEND_PORT = int(os.getenv("BACKEND_PORT", "8000"))
 FRONTEND_PORT = int(os.getenv("FRONTEND_PORT", "5173"))
@@ -61,6 +68,14 @@ FALLBACK_MESSAGE = (
 )
 
 OUT_OF_SCOPE_MESSAGE = "I can only help with questions about Geometra."
+
+# Shown instead of the generic fallback once a ticket has actually been raised for the
+# customer's question (see routers/chat.py) — ticket_number is filled in at request time.
+TICKET_RAISED_MESSAGE = (
+    "I don't have enough information about the question that you have asked. "
+    "I've raised a support ticket ({ticket_number}) for our team — they'll get back "
+    "to you within 12-24 hours."
+)
 
 GRATITUDE_MESSAGE = "Most welcome! I'm here to assist you if there are any further doubts."
 

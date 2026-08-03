@@ -134,7 +134,7 @@ def write_message(
         return cur.lastrowid
 
 
-def write_unknown_question(session_id: str, query: str, similarity_score: float) -> None:
+def write_unknown_question(session_id: str, query: str, similarity_score: float) -> int:
     with get_cursor(commit=True) as cur:
         cur.execute(
             """
@@ -143,6 +143,7 @@ def write_unknown_question(session_id: str, query: str, similarity_score: float)
             """,
             (session_id, query, similarity_score),
         )
+        return cur.lastrowid
 
 
 def write_evaluation_logs(message_id: int, results) -> None:

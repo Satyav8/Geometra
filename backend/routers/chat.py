@@ -11,9 +11,11 @@ from config import (
     GRATITUDE_MESSAGE,
     OUT_OF_SCOPE_MESSAGE,
     SUPPORT_EMAIL,
+    TICKET_RAISED_MESSAGE,
 )
 from database import (
     ensure_session,
+    get_session_messages,
     increment_session_turns,
     write_evaluation_logs,
     write_message,
@@ -28,6 +30,7 @@ from llm.guardrails import (
     check_uncertainty_language,
 )
 from llm.prompts import SYSTEM_PROMPT, build_user_message
+from integrations.resend_client import send_ticket_email
 from integrations.supabase_client import write_escalated_question
 from models import ChatRequest, ChatResponse, SourceChunk
 from rag.relevance import compute_criticality, is_gratitude, is_query_relevant
@@ -113,6 +116,23 @@ def chat(request: ChatRequest) -> ChatResponse:
         input_tokens=input_tokens,
     )
 
+    # On-topic-but-uncovered question: raise a ticket (the new unknown_questions row id
+    # becomes the ticket number) and swap the generic fallback text for one that tells
+    # the customer a ticket was actually raised, with the number and turnaround time.
+    ticket_number = None
+    if is_unknown_question:
+        top1 = chunks[0].similarity_score if chunks else 0.0
+        unknown_question_id = write_unknown_question(request.session_id, request.query, top1)
+        ticket_number = f"GEO-{unknown_question_id:03d}"
+        response = TICKET_RAISED_MESSAGE.format(ticket_number=ticket_number)
+        write_escalated_question(
+            question=request.query,
+            criticality=compute_criticality(top1),
+            similarity_score=top1,
+            session_id=request.session_id,
+            turn_number=request.turn_number,
+        )
+
     # Metrics above evaluate the substantive answer only; this check-in nudge is UX,
     # appended after so it doesn't skew hallucination/citation/etc. scoring.
     is_check_in_turn = request.turn_number == ESCALATION_TURN_THRESHOLD
@@ -139,15 +159,8 @@ def chat(request: ChatRequest) -> ChatResponse:
     )
 
     if is_unknown_question:
-        top1 = chunks[0].similarity_score if chunks else 0.0
-        write_unknown_question(request.session_id, request.query, top1)
-        write_escalated_question(
-            question=request.query,
-            criticality=compute_criticality(top1),
-            similarity_score=top1,
-            session_id=request.session_id,
-            turn_number=request.turn_number,
-        )
+        # Sent after write_message so the transcript includes this turn's own record.
+        send_ticket_email(ticket_number, request.session_id, get_session_messages(request.session_id))
 
     integrity_result = sqlite_log_integrity(
         message_id,
