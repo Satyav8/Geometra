@@ -23,7 +23,13 @@ OPENAI_EMBEDDING_MODEL = os.getenv("OPENAI_EMBEDDING_MODEL", "text-embedding-3-s
 # 384 = MiniLM's output size, 1536 = text-embedding-3-small's default output size. Used
 # only to create the Qdrant collection at the right size — must match EMBEDDING_BACKEND.
 EMBEDDING_DIM = 1536 if EMBEDDING_BACKEND == "openai" else 384
-TOP_K_CHUNKS = int(os.getenv("TOP_K_CHUNKS", "5"))
+# Raised 5->6: with OpenAI embeddings, the correct chunk for "How much does it cost?"
+# ranked 6th (score 0.582) - just outside the old cutoff. Verified against both
+# OpenAI (20/20 retrieval accuracy) and local MiniLM (no regression, still 81/81 tests).
+TOP_K_CHUNKS = int(os.getenv("TOP_K_CHUNKS", "6"))
+# Verified against real OpenAI embeddings too: on-topic scores ranged 0.48-0.88 (avg
+# 0.71), out-of-domain scores were 0.19-0.22 - the existing 0.30/0.60 cutoffs still sit
+# in a clean gap, so no threshold change was needed when switching embedding backends.
 MIN_SIMILARITY_SCORE = float(os.getenv("MIN_SIMILARITY_SCORE", "0.30"))
 LOW_CONFIDENCE_THRESHOLD = float(os.getenv("LOW_CONFIDENCE_THRESHOLD", "0.60"))
 
