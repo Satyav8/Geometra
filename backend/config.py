@@ -11,9 +11,15 @@ ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
 LLM_MODEL = os.getenv("LLM_MODEL", "llama-3.3-70b-versatile")
 
-# RAG — local embedding model (no API key / credits required)
+# RAG — embeddings. "local" (default, local dev/tests, no API key needed) or "openai"
+# (production, text-embedding-3-small). Kept separate for the same reason as every other
+# *_BACKEND flag here: local dev/tests should never spend real API credits.
+EMBEDDING_BACKEND = os.getenv("EMBEDDING_BACKEND", "local")
 EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "sentence-transformers/all-MiniLM-L6-v2")
-EMBEDDING_DIM = 384  # sentence-transformers/all-MiniLM-L6-v2 output size
+OPENAI_EMBEDDING_MODEL = os.getenv("OPENAI_EMBEDDING_MODEL", "text-embedding-3-small")
+# 384 = MiniLM's output size, 1536 = text-embedding-3-small's default output size. Used
+# only to create the Qdrant collection at the right size — must match EMBEDDING_BACKEND.
+EMBEDDING_DIM = 1536 if EMBEDDING_BACKEND == "openai" else 384
 TOP_K_CHUNKS = int(os.getenv("TOP_K_CHUNKS", "5"))
 MIN_SIMILARITY_SCORE = float(os.getenv("MIN_SIMILARITY_SCORE", "0.30"))
 LOW_CONFIDENCE_THRESHOLD = float(os.getenv("LOW_CONFIDENCE_THRESHOLD", "0.60"))
