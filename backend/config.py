@@ -1,7 +1,10 @@
 import os
 from dotenv import load_dotenv
 
-load_dotenv()
+# override=True: .env must always win over stray inherited shell/OS environment
+# variables of the same name (e.g. a leftover OPENAI_API_KEY from another project
+# on this machine) - otherwise dotenv silently keeps the shell's value instead.
+load_dotenv(override=True)
 
 # LLM
 LLM_PROVIDER = os.getenv("LLM_PROVIDER", "groq")
