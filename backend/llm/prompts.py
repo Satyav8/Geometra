@@ -55,7 +55,11 @@ from the context. When in doubt, use the fallback from Rule 2.
 
 def build_user_message(query: str, chunks: List[SourceChunk], confidence_level: str) -> str:
     prefix = "[LOW CONFIDENCE]\n" if confidence_level == "low" else ""
+    # Labeled "[Source: X]" (not "[Section: X]") to exactly match Rule 4's citation
+    # format below - with more chunks in context (TOP_K_CHUNKS=15), a mismatched label
+    # word gave the model more chances to blend the two together in its citation output
+    # (e.g. "[Source: Section: Marker]" instead of "[Source: Marker]").
     context = "\n\n".join(
-        [f"[Section: {c.section}]\n{c.text}" for c in chunks]
+        [f"[Source: {c.section}]\n{c.text}" for c in chunks]
     )
     return f"{prefix}CONTEXT:\n{context}\n\nCUSTOMER QUESTION: {query}"

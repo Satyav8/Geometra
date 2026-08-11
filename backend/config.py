@@ -23,10 +23,14 @@ OPENAI_EMBEDDING_MODEL = os.getenv("OPENAI_EMBEDDING_MODEL", "text-embedding-3-s
 # 384 = MiniLM's output size, 1536 = text-embedding-3-small's default output size. Used
 # only to create the Qdrant collection at the right size — must match EMBEDDING_BACKEND.
 EMBEDDING_DIM = 1536 if EMBEDDING_BACKEND == "openai" else 384
-# Raised 5->6: with OpenAI embeddings, the correct chunk for "How much does it cost?"
-# ranked 6th (score 0.582) - just outside the old cutoff. Verified against both
-# OpenAI (20/20 retrieval accuracy) and local MiniLM (no regression, still 81/81 tests).
-TOP_K_CHUNKS = int(os.getenv("TOP_K_CHUNKS", "6"))
+# Raised 6->15: gives the LLM enough of the FAQ at once to synthesize an answer across
+# multiple entries (e.g. "must I stick the marker before photographing?" isn't answered
+# by any single FAQ row, but is answerable by combining several). Verified against a
+# batch of adversarial/multi-fact questions with no hallucination or injection failures,
+# plus the original 20-query retrieval set and the local MiniLM suite (81/81, no
+# regression). See llm/prompts.py's [Source: X] labeling fix, needed once this many
+# chunks are in context.
+TOP_K_CHUNKS = int(os.getenv("TOP_K_CHUNKS", "15"))
 # Verified against real OpenAI embeddings too: on-topic scores ranged 0.48-0.88 (avg
 # 0.71), out-of-domain scores were 0.19-0.22 - the existing 0.30/0.60 cutoffs still sit
 # in a clean gap, so no threshold change was needed when switching embedding backends.
