@@ -100,11 +100,6 @@ body {
   box-shadow: 0 2px 8px rgba(20, 40, 70, 0.06);
 }
 
-.bot-header {
-  margin-bottom: 4px;
-  font-size: 0.85rem;
-}
-
 .unknown-notice {
   margin-top: 8px;
   padding: 6px 10px;
