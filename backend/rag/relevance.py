@@ -48,3 +48,19 @@ GRATITUDE_PHRASES = {
 def is_gratitude(query: str) -> bool:
     query_lower = query.lower().strip().strip("!.,")
     return any(_contains_word(query_lower, phrase) for phrase in GRATITUDE_PHRASES)
+
+
+GREETING_PHRASES = {
+    "hi", "hii", "hiii", "hello", "hellooo", "hey", "heyy",
+    "hi there", "hello there", "hey there",
+    "good morning", "good afternoon", "good evening",
+}
+
+
+def is_greeting(query: str) -> bool:
+    """Exact match only (unlike is_gratitude's "contains anywhere") - a greeting is much
+    more likely than "thanks" to open a message that also has a real question in it
+    (e.g. "Hi, how much does it cost?"), so only short-circuit when the WHOLE message
+    is just a greeting, otherwise the real question would never get answered."""
+    normalized = query.lower().strip().strip("!.,")
+    return normalized in GREETING_PHRASES

@@ -1,6 +1,6 @@
 import pytest
 
-from rag.relevance import compute_criticality, is_gratitude, is_query_relevant
+from rag.relevance import compute_criticality, is_gratitude, is_greeting, is_query_relevant
 from rag.retriever import retrieve
 
 # 20 test queries checked against a distinctive substring of their known-correct answer,
@@ -65,6 +65,22 @@ def test_gratitude_detected(query):
 ])
 def test_gratitude_not_falsely_detected(query):
     assert is_gratitude(query) is False
+
+
+@pytest.mark.parametrize("query", ["Hi", "hii", "Hello!", "hey", "Hi there", "Good morning", "HELLO"])
+def test_greeting_detected(query):
+    assert is_greeting(query) is True
+
+
+@pytest.mark.parametrize("query", [
+    "Hi, how much does it cost?",
+    "Hello, can I measure a washbasin?",
+    "hey what is geometra",
+    "What is Geometra?",
+    "Thank you",
+])
+def test_greeting_not_falsely_detected(query):
+    assert is_greeting(query) is False
 
 
 @pytest.mark.parametrize("query", [

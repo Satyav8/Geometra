@@ -112,6 +112,8 @@ TICKET_RAISED_MESSAGE = (
 
 GRATITUDE_MESSAGE = "Most welcome! I'm here to assist you if there are any further doubts."
 
+GREETING_MESSAGE = "Hello! How may I help you?"
+
 # After this many turns, nudge the customer to confirm resolution / escalate to a human.
 ESCALATION_TURN_THRESHOLD = int(os.getenv("ESCALATION_TURN_THRESHOLD", "6"))
 SUPPORT_EMAIL = os.getenv("SUPPORT_EMAIL", "satyav8.geometra@gmail.com")

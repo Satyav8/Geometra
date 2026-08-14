@@ -9,6 +9,7 @@ from config import (
     ESCALATION_TURN_THRESHOLD,
     FALLBACK_MESSAGE,
     GRATITUDE_MESSAGE,
+    GREETING_MESSAGE,
     OUT_OF_SCOPE_MESSAGE,
     SUPPORT_EMAIL,
     TICKET_RAISED_MESSAGE,
@@ -33,7 +34,7 @@ from llm.prompts import SYSTEM_PROMPT, build_user_message
 from integrations.resend_client import send_ticket_email
 from integrations.supabase_client import write_escalated_question
 from models import ChatRequest, ChatResponse, SourceChunk
-from rag.relevance import compute_criticality, is_gratitude, is_query_relevant
+from rag.relevance import compute_criticality, is_gratitude, is_greeting, is_query_relevant
 from rag.retriever import retrieve
 from rag.spelling import correct_query
 
@@ -69,12 +70,21 @@ def chat(request: ChatRequest) -> ChatResponse:
     is_unknown_question = False
 
     is_gratitude_turn = is_gratitude(query)
+    is_greeting_turn = is_greeting(query)
     if is_gratitude_turn:
         # Courtesy close — no need to hit retrieval or the LLM for this.
         chunks = []
         confidence_level = "high"
         is_relevant = True
         response = GRATITUDE_MESSAGE
+    elif is_greeting_turn:
+        # Plain "Hi"/"Hello" with nothing else — greet back, no retrieval needed. Only
+        # fires when the WHOLE message is just a greeting (see is_greeting), so "Hi, how
+        # much does it cost?" still gets treated as a real question, not short-circuited.
+        chunks = []
+        confidence_level = "high"
+        is_relevant = True
+        response = GREETING_MESSAGE
     else:
         chunks, confidence_level = retrieve(query)
         is_relevant = is_query_relevant(query)
@@ -136,9 +146,13 @@ def chat(request: ChatRequest) -> ChatResponse:
 
     # Metrics above evaluate the substantive answer only; this check-in nudge is UX,
     # appended after so it doesn't skew hallucination/citation/etc. scoring. Skipped on
-    # a gratitude turn — "thank you" already implies the query is resolved, so asking
-    # "has this resolved your query?" right after is contradictory.
-    is_check_in_turn = request.turn_number == ESCALATION_TURN_THRESHOLD and not is_gratitude_turn
+    # a gratitude or plain-greeting turn — neither implies an actual question was asked
+    # yet, so "has this resolved your query?" right after would be contradictory/odd.
+    is_check_in_turn = (
+        request.turn_number == ESCALATION_TURN_THRESHOLD
+        and not is_gratitude_turn
+        and not is_greeting_turn
+    )
     if is_check_in_turn:
         response = response + CHECK_IN_MESSAGE
 
