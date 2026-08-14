@@ -3,29 +3,32 @@ import pytest
 from rag.relevance import compute_criticality, is_gratitude, is_query_relevant
 from rag.retriever import retrieve
 
-# 20 test queries covering all FAQ sheet categories + unknown/out-of-scope questions.
-# Categories come from the live Google Sheet (see rag/ingestor.py), not the old static file.
+# 20 test queries checked against a distinctive substring of their known-correct answer,
+# not the FAQ's category/section label. The team has renamed the category taxonomy twice
+# now (Title Case -> lowercase, "ID"/"Category" -> "SlnoSlno"/"category ") without changing
+# the underlying answers, so asserting on category names kept going stale for reasons
+# unrelated to retrieval quality. Answer content is far more stable than category naming.
 TEST_QUERIES = [
-    ("What is Geometra?", "Basic"),
-    ("How does the measurement process work step by step?", "Basic"),
-    ("Do I need any special hardware or a laser scanner?", "Basic"),
-    ("Do I have to download an app to use Geometra?", "Basic"),
-    ("What file formats do I get as output?", "Basic"),
-    ("Is Geometra a floor-plan tool or an elevations tool?", "Basic"),
-    ("How accurate is Geometra in millimeters?", "Basic"),
-    ("Has Geometra been tested against a laser measure?", "Basic"),
-    ("What's the largest wall Geometra can measure?", "Basic"),
-    ("What is the marker and why do I need it?", "Marker"),
-    ("How do I print the marker correctly?", "Marker"),
-    ("Can I reuse the same marker multiple times?", "Marker"),
-    ("Where do I place the marker on the wall?", "Marker"),
-    ("How many corners of the wall need to be visible in the photo?", " Capturing the Photo"),
-    ("Can I measure a whole room at once?", " Capturing the Photo"),
-    ("How much does Geometra cost per wall?", " Pricing & Plans"),
-    ("What does the free plan include?", " Pricing & Plans"),
-    ("Can I get a refund if a scan fails?", " Pricing & Plans"),
-    ("Is my uploaded photo data stored securely?", " Data Privacy & Security"),
-    ("How do I sign up for Geometra?", " Getting Started & Support"),
+    ("What is Geometra?", "exact measurements"),
+    ("How does the measurement process work step by step?", "Stick our marker"),
+    ("Do I need any special hardware or a laser scanner?", "laser printer"),
+    ("Do I have to download an app to use Geometra?", "No app to download"),
+    ("What file formats do I get as output?", "DXF"),
+    ("Is Geometra a floor-plan tool or an elevations tool?", "elevation"),
+    ("How accurate is Geometra in millimeters?", "10 mm"),
+    ("Has Geometra been tested against a laser measure?", "laser measurements"),
+    ("What's the largest wall Geometra can measure?", "marker size"),
+    ("What is the marker and why do I need it?", "reference point"),
+    ("How do I print the marker correctly?", "portrait"),
+    ("Can I reuse the same marker multiple times?", "again and again"),
+    ("Where do I place the marker on the wall?", "anywhere on the wall"),
+    ("How many corners of the wall need to be visible in the photo?", "3 corners"),
+    ("Can I measure a whole room at once?", "One wall at a time"),
+    ("How much does Geometra cost per wall?", "399"),
+    ("What does the free plan include?", "3 wall elevations"),
+    ("Can I get a refund if a scan fails?", "refund policy"),
+    ("Is my uploaded photo data stored securely?", "privacy and data policy"),
+    ("How do I sign up for Geometra?", "Google"),
 ]
 
 UNKNOWN_QUERIES = [
@@ -34,13 +37,13 @@ UNKNOWN_QUERIES = [
 ]
 
 
-@pytest.mark.parametrize("query,expected_section", TEST_QUERIES)
-def test_retrieval_returns_expected_section(query, expected_section):
+@pytest.mark.parametrize("query,expected_substring", TEST_QUERIES)
+def test_retrieval_returns_expected_answer(query, expected_substring):
     chunks, confidence_level = retrieve(query)
     assert len(chunks) > 0
     assert confidence_level in ("high", "low")
-    sections = [c.section.strip() for c in chunks]
-    assert expected_section.strip() in sections
+    combined_text = " ".join(c.text for c in chunks)
+    assert expected_substring.lower() in combined_text.lower()
 
 
 @pytest.mark.parametrize("query", UNKNOWN_QUERIES)

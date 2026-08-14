@@ -69,27 +69,31 @@ def fetch_sheet_rows(csv_url: str = FAQ_SHEET_CSV_URL):
 
     header = None
     for row in reader:
-        if row and row[0].strip().lower() == "id" and "Question" in row:
+        if row and any(c.strip().lower() == "question" for c in row):
             header = [c.strip() for c in row]
             break
 
     if header is None:
-        raise ValueError("Could not find header row (expected an 'ID' column) in the FAQ sheet")
+        raise ValueError("Could not find header row (expected a 'Question' column) in the FAQ sheet")
 
-    col = {name: idx for idx, name in enumerate(header)}
-    required = {"Category", "Question", "Draft Answer", "Updated response"}
+    # Case-insensitive, position-independent lookup: the team has renamed/reordered
+    # columns before (e.g. "ID" -> "SlnoSlno", "Category" -> "category ", moved to a
+    # different position) without changing which columns are actually needed, so match
+    # by lowercase name rather than exact position/casing.
+    col = {name.lower(): idx for idx, name in enumerate(header)}
+    required = {"category", "question", "draft answer", "updated response"}
     missing = required - set(col.keys())
     if missing:
         raise ValueError(f"FAQ sheet is missing expected columns: {missing}")
 
     rows = []
     for row in reader:
-        if len(row) <= col["Question"]:
+        if len(row) <= col["question"]:
             continue
-        category = row[col["Category"]].strip() if col["Category"] < len(row) else ""
-        question = row[col["Question"]].strip() if col["Question"] < len(row) else ""
-        draft_answer = row[col["Draft Answer"]].strip() if col["Draft Answer"] < len(row) else ""
-        updated_answer = row[col["Updated response"]].strip() if col["Updated response"] < len(row) else ""
+        category = row[col["category"]].strip() if col["category"] < len(row) else ""
+        question = row[col["question"]].strip() if col["question"] < len(row) else ""
+        draft_answer = row[col["draft answer"]].strip() if col["draft answer"] < len(row) else ""
+        updated_answer = row[col["updated response"]].strip() if col["updated response"] < len(row) else ""
         answer = updated_answer or draft_answer
 
         if not category or not question or not answer:
