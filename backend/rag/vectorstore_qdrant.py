@@ -80,11 +80,23 @@ def upsert_chunks(
         resp.raise_for_status()
 
 
+def _native_id(id_str: str):
+    """Qdrant point ids are typed (unsigned int or UUID string) - get_all_ids() returns
+    everything as a string for diffing against content-hash ids, but a stringified
+    integer like "0" (from legacy pre-incremental data) is rejected by Qdrant's own
+    APIs as an invalid point id unless converted back to an actual int first."""
+    try:
+        return int(id_str)
+    except ValueError:
+        return id_str
+
+
 def delete_chunks(chunk_ids: List[str]) -> None:
     if not chunk_ids:
         return
+    native_ids = [_native_id(cid) for cid in chunk_ids]
     resp = requests.post(
-        _collection_url("/points/delete"), headers=HEADERS, json={"points": chunk_ids}, timeout=30
+        _collection_url("/points/delete"), headers=HEADERS, json={"points": native_ids}, timeout=30
     )
     resp.raise_for_status()
 
