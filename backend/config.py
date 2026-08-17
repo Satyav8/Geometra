@@ -12,7 +12,10 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
-LLM_MODEL = os.getenv("LLM_MODEL", "llama-3.3-70b-versatile")
+# llama-3.3-70b-versatile is decommissioned by Groq on 2026-08-16 - switched the local
+# dev default to Groq's recommended replacement. Production is unaffected (runs
+# LLM_PROVIDER=openai/gpt-4o-mini via Render env vars, set independently of this default).
+LLM_MODEL = os.getenv("LLM_MODEL", "openai/gpt-oss-120b")
 
 # RAG — embeddings. "local" (default, local dev/tests, no API key needed) or "openai"
 # (production, text-embedding-3-small). Kept separate for the same reason as every other
