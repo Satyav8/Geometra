@@ -1,6 +1,8 @@
 import csv
+import hashlib
 import io
 import re
+import uuid
 
 import requests
 from langchain_text_splitters import RecursiveCharacterTextSplitter
@@ -24,38 +26,66 @@ def _split_into_sections(raw_text: str):
     return sections
 
 
-def _store_chunks(rows) -> int:
-    """rows: iterable of (section_name, combined_qa_text). Chunks, embeds, and stores in ChromaDB."""
-    splitter = RecursiveCharacterTextSplitter(
-        chunk_size=400, chunk_overlap=60, add_start_index=True
-    )
+def _stable_chunk_id(section_name: str, text: str) -> str:
+    """Deterministic UUID derived from a chunk's own content - identical content always
+    maps to the same id, so "this chunk is unchanged since last ingestion" is just "this
+    id already exists in the vector store", with no separate tracking needed. Also a
+    valid Qdrant point id (Qdrant requires an unsigned int or a UUID string)."""
+    digest = hashlib.md5(f"{section_name}::{text}".encode("utf-8")).digest()
+    return str(uuid.UUID(bytes=digest))
 
-    chunk_texts = []
-    chunk_metadatas = []
-    chunk_ids = []
-    counter = 0
 
+def _chunk_rows(rows):
+    """rows: iterable of (section_name, combined_qa_text). Returns [(chunk_id, section_name, text)]."""
+    splitter = RecursiveCharacterTextSplitter(chunk_size=400, chunk_overlap=60)
+    chunks = []
     for section_name, text in rows:
         docs = splitter.create_documents([text], metadatas=[{"section_name": section_name}])
         for doc in docs:
-            chunk_id = f"faq_{counter:03d}"
-            start = doc.metadata.get("start_index", 0)
-            end = start + len(doc.page_content)
-            chunk_texts.append(doc.page_content)
-            chunk_metadatas.append(
-                {
-                    "chunk_id": chunk_id,
-                    "section_name": section_name,
-                    "char_start": start,
-                    "char_end": end,
-                }
-            )
-            chunk_ids.append(chunk_id)
-            counter += 1
+            chunk_id = _stable_chunk_id(section_name, doc.page_content)
+            chunks.append((chunk_id, section_name, doc.page_content))
+    return chunks
 
-    embeddings = embed_batch(chunk_texts)
-    vectorstore.recreate_and_store(chunk_ids, embeddings, chunk_texts, chunk_metadatas)
-    return len(chunk_ids)
+
+def _store_chunks(rows) -> dict:
+    """Only embeds/uploads chunks that are new or whose content changed since the last
+    ingestion, and removes chunks whose source row no longer exists - a full re-ingest
+    used to re-embed the entire FAQ every time regardless of what actually changed,
+    which cost real (if small) OpenAI credits on every server boot in production."""
+    chunks_raw = _chunk_rows(rows)
+    # Dedupe by id: identical content (e.g. a literally duplicated row in the sheet)
+    # hashes to the same id, and a vector store upsert rejects the same id appearing
+    # twice in one call.
+    seen = set()
+    chunks = []
+    for c in chunks_raw:
+        if c[0] not in seen:
+            chunks.append(c)
+            seen.add(c[0])
+
+    new_ids = {c[0] for c in chunks}
+    existing_ids = vectorstore.get_all_ids()
+
+    ids_to_add = new_ids - existing_ids
+    ids_to_remove = existing_ids - new_ids
+
+    to_embed = [c for c in chunks if c[0] in ids_to_add]
+    if to_embed:
+        chunk_ids = [c[0] for c in to_embed]
+        texts = [c[2] for c in to_embed]
+        metadatas = [{"chunk_id": c[0], "section_name": c[1]} for c in to_embed]
+        embeddings = embed_batch(texts)
+        vectorstore.upsert_chunks(chunk_ids, embeddings, texts, metadatas)
+
+    if ids_to_remove:
+        vectorstore.delete_chunks(list(ids_to_remove))
+
+    return {
+        "total": len(chunks),
+        "added_or_changed": len(ids_to_add),
+        "removed": len(ids_to_remove),
+        "unchanged": len(chunks) - len(ids_to_add),
+    }
 
 
 def fetch_sheet_rows(csv_url: str = FAQ_SHEET_CSV_URL):
@@ -104,7 +134,7 @@ def fetch_sheet_rows(csv_url: str = FAQ_SHEET_CSV_URL):
     return rows
 
 
-def ingest_faq_from_sheet(csv_url: str = FAQ_SHEET_CSV_URL) -> int:
+def ingest_faq_from_sheet(csv_url: str = FAQ_SHEET_CSV_URL) -> dict:
     sheet_rows = fetch_sheet_rows(csv_url)
     rows = [
         (category, f"Q: {question}\nA: {answer}")
@@ -113,7 +143,7 @@ def ingest_faq_from_sheet(csv_url: str = FAQ_SHEET_CSV_URL) -> int:
     return _store_chunks(rows)
 
 
-def ingest_faq(faq_path: str) -> int:
+def ingest_faq(faq_path: str) -> dict:
     """Legacy path: ingest from a local plain-text FAQ file (## Section: <name> headers)."""
     with open(faq_path, "r", encoding="utf-8") as f:
         raw_text = f.read()

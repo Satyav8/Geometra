@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Set
 
 import chromadb
 from chromadb.config import Settings
@@ -35,6 +35,24 @@ def recreate_and_store(
     collection = client.create_collection(CHROMA_COLLECTION, metadata={"hnsw:space": "cosine"})
     collection.add(ids=chunk_ids, embeddings=embeddings, documents=documents, metadatas=metadatas)
     _client, _collection = client, collection
+
+
+def get_all_ids() -> Set[str]:
+    return set(_get_collection().get(include=[])["ids"])
+
+
+def upsert_chunks(
+    chunk_ids: List[str], embeddings: List[List[float]], documents: List[str], metadatas: List[dict]
+) -> None:
+    if not chunk_ids:
+        return
+    _get_collection().upsert(ids=chunk_ids, embeddings=embeddings, documents=documents, metadatas=metadatas)
+
+
+def delete_chunks(chunk_ids: List[str]) -> None:
+    if not chunk_ids:
+        return
+    _get_collection().delete(ids=chunk_ids)
 
 
 def query(query_embedding: List[float], top_k: int) -> List[dict]:
