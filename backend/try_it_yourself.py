@@ -210,6 +210,22 @@ def is_filler(text: str) -> bool:
     return stripped in FILLER_PHRASES
 
 
+# Found via manual testing: a bare "no" with nothing pending (no ticket offer, no
+# clarifying question) was going all the way through Pass 1/2 and coming back as "I don't
+# have enough information to answer that, would you like a ticket?" - "no" isn't a
+# question at all, it's a reaction to whatever S.A.M just said, and deserves a response
+# that treats it as pushback/disagreement, not an unanswerable FAQ lookup. Exact-match
+# only (like is_filler), NOT a first-word check - "no I mean X" or "no thanks, but can
+# you tell me Y" carry real new content after the "no" and must keep falling through to
+# Pass 1/2 normally, only a bare "no" on its own is ambiguous enough to need this.
+BARE_NEGATION_PHRASES = ("no", "nope", "nah", "nay", "not really", "no thanks", "not interested")
+
+
+def is_bare_negation(text: str) -> bool:
+    stripped = text.strip().lower().strip(".!,")
+    return stripped in BARE_NEGATION_PHRASES
+
+
 def history_block(history, label="RECENT CONVERSATION"):
     if not history:
         return ""
@@ -300,14 +316,23 @@ def process_turn(query, history, awaiting):
     # (first word "alright" isn't in AFFIRMATIVE_WORDS), but it clearly asks for a
     # ticket, so wants_ticket() must still get a chance to catch it (found via testing:
     # an elif here let that exact phrasing fall through to a fresh Pass 1/2 cycle).
-    if awaiting == "ticket_confirmation" and is_affirmative(query):
-        return TICKET_RAISED_MESSAGE, None
+    if awaiting == "ticket_confirmation":
+        if is_affirmative(query):
+            return TICKET_RAISED_MESSAGE, None
+        if is_bare_negation(query):
+            return (
+                "No problem, I won't raise a ticket. Let me know if there's anything "
+                "else I can help with!"
+            ), None
+        # anything else: clear awaiting, fall through and treat this message as a new question
     if wants_ticket(query):
         return TICKET_RAISED_MESSAGE, None
-    # anything else: clear awaiting, fall through and treat this message as a new question
 
     if is_filler(query):
         return "No worries! Let me know whenever you have a question about Geometra.", None
+
+    if is_bare_negation(query):
+        return "No worries — what would you like me to clarify or help with instead?", None
 
     # Pass 1 — Understand. Always gets recent history (not just when awaiting ==
     # "clarification" as the original diagram showed) - stress-testing found that a
