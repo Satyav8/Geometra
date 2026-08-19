@@ -304,35 +304,38 @@ def retrieve_combined(query_text):
 
 def process_turn(query, history, awaiting):
     """Returns (response_text, new_awaiting_state)."""
+    TICKET_RAISED_MESSAGE = "[TEST] Ticket would be raised here — last 3 turns emailed via Resend."
+
+    # Checked before is_gratitude - is_gratitude() matches on "contains the word thanks
+    # anywhere", so "no thanks" (a decline) was being misread as gratitude and answered
+    # with the warm thank-you closer instead of actually declining the ticket. An
+    # unambiguous bare-negation phrase (exact match, see is_bare_negation) takes priority.
+    if awaiting == "ticket_confirmation" and is_bare_negation(query):
+        return (
+            "No problem, I won't raise a ticket. Let me know if there's anything "
+            "else I can help with!"
+        ), None
+    if awaiting != "ticket_confirmation" and is_bare_negation(query):
+        return "No worries — what would you like me to clarify or help with instead?", None
+
     if is_gratitude(query):
         return GRATITUDE_MESSAGE, None
     if is_greeting(query):
         return GREETING_MESSAGE, None
-
-    TICKET_RAISED_MESSAGE = "[TEST] Ticket would be raised here — last 3 turns emailed via Resend."
 
     # These two checks must be independent, not if/elif - "alright raise a ticket for
     # this then" while awaiting == "ticket_confirmation" doesn't match is_affirmative
     # (first word "alright" isn't in AFFIRMATIVE_WORDS), but it clearly asks for a
     # ticket, so wants_ticket() must still get a chance to catch it (found via testing:
     # an elif here let that exact phrasing fall through to a fresh Pass 1/2 cycle).
-    if awaiting == "ticket_confirmation":
-        if is_affirmative(query):
-            return TICKET_RAISED_MESSAGE, None
-        if is_bare_negation(query):
-            return (
-                "No problem, I won't raise a ticket. Let me know if there's anything "
-                "else I can help with!"
-            ), None
-        # anything else: clear awaiting, fall through and treat this message as a new question
+    if awaiting == "ticket_confirmation" and is_affirmative(query):
+        return TICKET_RAISED_MESSAGE, None
     if wants_ticket(query):
         return TICKET_RAISED_MESSAGE, None
+    # anything else: clear awaiting, fall through and treat this message as a new question
 
     if is_filler(query):
         return "No worries! Let me know whenever you have a question about Geometra.", None
-
-    if is_bare_negation(query):
-        return "No worries — what would you like me to clarify or help with instead?", None
 
     # Pass 1 — Understand. Always gets recent history (not just when awaiting ==
     # "clarification" as the original diagram showed) - stress-testing found that a
