@@ -9,9 +9,18 @@ import sys
 sys.path.insert(0, ".")
 from rag.retriever import retrieve
 from rag.relevance import is_gratitude, is_greeting, is_query_relevant
+from rag.embedder import embed_text
 from llm.client import call_llm
 from llm.prompts import SYSTEM_PROMPT
-from config import GRATITUDE_MESSAGE, GREETING_MESSAGE, OUT_OF_SCOPE_MESSAGE
+from models import SourceChunk
+from config import (
+    GRATITUDE_MESSAGE,
+    GREETING_MESSAGE,
+    OUT_OF_SCOPE_MESSAGE,
+    LOW_CONFIDENCE_THRESHOLD,
+    MIN_SIMILARITY_SCORE,
+)
+import website_kb
 
 # Loosened per the spec: fast-path check is keyword hit OR similarity >= 0.15 (was 0.30
 # as the sole gate before). Below this AND no keyword hit -> out of scope, no LLM spent.
@@ -35,6 +44,15 @@ can just restate it cleanly."""
 # left Rule 2's original fallback text as a competing instruction, and the model
 # sometimes followed the old one instead of the new [CLARIFY]/[CANNOT_ANSWER] tags.
 _ANSWER_BASE = SYSTEM_PROMPT.replace(
+    "STRICT RULES — you must follow all of these without exception:",
+    """TONE: Talk like an attentive human support agent, not a script. Acknowledge what the
+customer actually said, use natural phrasing, and sound genuinely interested in solving
+their problem rather than reciting a manual. Never end a turn on a flat dead end — if you
+can't fully answer, still leave the customer with a clear, warm next step. This applies
+throughout every rule below, especially Rules 2 and 5.
+
+STRICT RULES — you must follow all of these without exception:""",
+).replace(
     """1. ANSWER ONLY FROM CONTEXT: Answer exclusively from the retrieved knowledge base
    chunks provided in the CONTEXT section below. Never use outside knowledge.""",
     """1. ANSWER ONLY FROM CONTEXT: Answer exclusively from the retrieved knowledge base
@@ -45,21 +63,45 @@ _ANSWER_BASE = SYSTEM_PROMPT.replace(
    two or more chunks together establish a direct answer (e.g. one states a general rule,
    another confirms it applies to this specific case), combine them into one direct,
    confident answer rather than treating the question as unclear or uncovered. This check
-   happens before Rule 2 or 2B, not instead of them.""",
+   happens before Rule 2 or 2B, not instead of them.
+
+1C. GENERALIZE ESTABLISHED RULES: If the context establishes a general rule (e.g. "each
+   distinct depth on a wall needs its own marker"), apply it confidently to any
+   structurally similar feature even if that exact feature isn't named in the context -
+   a bay window, alcove, pillar, or recessed shelf all create a depth change just like a
+   fireplace or windowsill do. A new example of an already-established general rule is
+   not unclear or uncovered just because its specific name doesn't appear verbatim in the
+   retrieved chunks.
+
+1D. DON'T INFER UNSTATED CLAIMS: Only state what the context actually asserts - do not
+   draw further conclusions that merely sound like a natural extension of it. Example:
+   "measurements are calculated with math, not AI" does NOT mean "no human ever reviews
+   the output" - those are separate, unrelated claims, and the second one isn't stated
+   anywhere, so asserting it would be a guess dressed up as fact. This is different from
+   Rule 1C: 1C applies an established RULE to a new, structurally similar CASE; this rule
+   stops you from inventing a brand-new, unstated FACT that isn't actually a case of any
+   established rule. If a question reaches for something adjacent to but not actually
+   covered by the context, treat it as uncovered (Rule 2B) rather than inventing a
+   plausible-sounding answer.""",
 ).replace(
     """2. NO HALLUCINATION: If the context does not contain enough information to answer
    the question accurately, respond with EXACTLY this fallback message:
    "I don't have enough information about the question that you have asked.
    You can contact our support team through email."
    Do not add anything else to this fallback. Do not guess.""",
-    """2. TOO VAGUE TO ANSWER: If you genuinely cannot tell what the customer is asking
-   (not because the FAQ lacks the answer, but because their message doesn't say
-   enough), do not guess. Ask TWO distinct clarifying questions in this one turn
-   (not one) so you gather more context in a single round-trip instead of going
-   back and forth. Respond with EXACTLY:
-   [CLARIFY] 1) <first specific question> 2) <second specific question>
-   The two questions must be genuinely different angles on the ambiguity, not
-   two phrasings of the same question.
+    """2. TOO VAGUE TO ANSWER: If, after applying Rule 1B, you genuinely cannot tell what
+   the customer is asking (not because the FAQ lacks the answer, but because their
+   message doesn't say enough), do not guess. Ask TWO clarifying questions in this one
+   turn, grounded in what the CONTEXT below actually contains - e.g. if it covers both
+   a wardrobe and a washbasin scenario, ask which one they mean, not a generic "what do
+   you want to measure?" Open with a brief, warm acknowledgment of what they did say.
+   Respond with EXACTLY:
+   [CLARIFY] <short warm acknowledgment>. 1) <first diagnostic question, grounded in
+   the context> 2) <second diagnostic question, a genuinely different angle - not a
+   reworded copy of the first>
+   Do not use this rule if the customer's message already gives you enough to answer
+   directly (see Rule 1B) - clarifying a question you could already answer is worse
+   than just answering it.
 
 2B. CONTEXT DOESN'T COVER THIS: Before using this rule, check EVERY chunk in the
    CONTEXT section below, not just the first or most-similar one — the right answer
@@ -73,6 +115,35 @@ _ANSWER_BASE = SYSTEM_PROMPT.replace(
 ).replace(
     "When in doubt, use the fallback from Rule 2.",
     "When in doubt, use Rule 2 ([CLARIFY]) or 2B ([CANNOT_ANSWER])."
+).replace(
+    """8. MEASUREMENT SCOPE: Geometra can measure any physical surface or object — walls,
+   wardrobes, washbasins, ceilings, floors, and other physical objects — not just walls.
+   This is a confirmed product fact, true regardless of whether a specific object is
+   named in the retrieved context. The only requirement is that the Geometra marker is
+   properly placed and the photo clearly shows at least 3 visible corners of the
+   surface/object being measured. State this confidently and directly when asked whether
+   something can be measured — do not decline or hedge just because that specific object
+   isn't named in the context, as long as it is a real physical surface or object capable
+   of being photographed with 3 visible corners.""",
+    """8. MEASUREMENT SCOPE: Geometra can measure any physical surface or object — walls,
+   wardrobes, washbasins, ceilings, floors, and other physical objects — not just walls.
+   This is a confirmed product fact, true regardless of whether a specific object is
+   named in the retrieved context. The only requirement is that the Geometra marker is
+   properly placed and the photo clearly shows at least 3 visible corners of the
+   surface/object being measured. State this confidently and directly when asked whether
+   something can be measured — do not decline or hedge just because that specific object
+   isn't named in the context, as long as it is a real physical surface or object capable
+   of being photographed with 3 visible corners.
+
+8B. MULTI-SIDED / N-CORNER SURFACES: "At least 3 visible corners" is the specific case
+   for a standard 4-sided wall (N=4 corners, N-1=3 must be visible). This generalizes:
+   for ANY closed surface with N sides/corners, N-1 of those corners must be visible in
+   the photo — a 5-sided room needs 4 visible corners, a 6-sided room needs 5, and so
+   on. The surface must be a closed shape. State this confidently when asked about
+   rooms or surfaces with more than 4 sides — Geometra is not limited to simple
+   rectangular walls, as long as the N-1 visibility rule and the closed-surface
+   requirement are met. Do not decline or say "not possible" for a multi-sided room
+   just because it has more than 4 corners.""",
 )
 
 ANSWER_PROMPT = _ANSWER_BASE
@@ -81,8 +152,15 @@ HEDGE_WORDS = ["i think", "i believe", "probably", "i'm not sure", "it seems", "
 
 # Exact-match on the whole reply missed common natural phrasings like "yes please" or
 # "yeah sure" (round-2 testing, turn 12). Checking just the first word instead covers those
-# without needing a full affirmative-intent classifier.
-AFFIRMATIVE_WORDS = ("yes", "y", "yeah", "yep", "yup", "sure", "ok", "okay")
+# without needing a full affirmative-intent classifier. Expanded again after "ya sure do
+# it" wasn't recognized (round-5 testing) - "ya" is a very common informal "yes" that
+# wasn't in the original list. Deliberately excludes "please" and "fine" as standalone
+# triggers - both have plausible non-affirmative first-word uses ("please don't", "fine,
+# whatever") that would misfire.
+AFFIRMATIVE_WORDS = (
+    "yes", "y", "yeah", "yea", "yeh", "ya", "yah", "yep", "yup", "mhm", "mhmm",
+    "sure", "ok", "okay", "alright", "aight", "definitely", "absolutely", "certainly",
+)
 
 
 def has_hedge(text: str) -> bool:
@@ -116,6 +194,20 @@ def wants_ticket(text: str) -> bool:
     if lowered.split()[0].strip(".!,") in ("no", "not"):
         return False
     return is_affirmative(text) or any(w in lowered for w in TICKET_ACTION_WORDS)
+
+
+# Found via manual testing: a bare backchannel utterance like "mhm" (not a real question,
+# not confirming anything) was going all the way through Pass 1/2 and coming back as "I
+# don't have enough information to answer that, would you like a ticket?" - a question
+# deserves that kind of response, a verbal filler doesn't. This is checked AFTER the
+# ticket-confirmation checks above, so "mhm" while a ticket offer is actually pending still
+# counts as a "yes" via is_affirmative - this only catches fillers with nothing pending.
+FILLER_PHRASES = ("mhm", "mhmm", "hmm", "hm", "mm", "uh huh", "uhhuh", "huh", "meh")
+
+
+def is_filler(text: str) -> bool:
+    stripped = text.strip().lower().strip(".!,")
+    return stripped in FILLER_PHRASES
 
 
 def history_block(history, label="RECENT CONVERSATION"):
@@ -153,9 +245,11 @@ def answer_pass(original_query, intent, chunks, confidence, hedge_retry=False, a
     # clarifying question after clarifying question forever instead of ever reaching
     # [CANNOT_ANSWER] and offering a ticket - found via round-4 testing.
     clarify_cap_note = (
-        "\nNOTE: the customer was already asked a clarifying question last turn. Do not "
-        "ask another one. If this reply still isn't enough to answer from the context, "
-        "use [CANNOT_ANSWER] instead of asking again.\n" if already_clarified else ""
+        "\nNOTE: the customer was already asked a clarifying question last turn. Rule 2 "
+        "([CLARIFY]) is NOT available on this turn - do not produce another [CLARIFY] "
+        "response no matter how tempting. Either answer directly (use Rule 1B to combine "
+        "whatever the customer's last two messages together now tell you), or if it's "
+        "still genuinely not covered, use [CANNOT_ANSWER].\n" if already_clarified else ""
     )
     user_message = (
         f"{prefix}Customer's likely intent: {intent}\n{retry_note}{clarify_cap_note}\n"
@@ -163,6 +257,33 @@ def answer_pass(original_query, intent, chunks, confidence, hedge_retry=False, a
     )
     response, _, _ = call_llm(ANSWER_PROMPT, user_message)
     return response
+
+
+def retrieve_combined(query_text):
+    """Same as rag.retriever.retrieve(), but also queries the isolated geometra_website
+    collection (see website_kb.py) and merges results in, re-sorted by similarity and
+    re-scored for confidence. Kept as a wrapper here rather than editing rag/retriever.py
+    directly, so the production retrieve() path used by routers/chat.py is untouched."""
+    faq_chunks, _ = retrieve(query_text)
+    query_embedding = embed_text(query_text)
+    website_results = website_kb.query(query_embedding, top_k=5)
+    website_chunks = [
+        SourceChunk(
+            chunk_id=r["chunk_id"], section=r["section"], text=r["text"],
+            similarity_score=r["similarity_score"],
+        )
+        for r in website_results
+    ]
+    combined = sorted(faq_chunks + website_chunks, key=lambda c: c.similarity_score, reverse=True)[:15]
+
+    top1 = combined[0].similarity_score if combined else 0.0
+    if top1 >= LOW_CONFIDENCE_THRESHOLD:
+        confidence = "high"
+    elif top1 >= MIN_SIMILARITY_SCORE:
+        confidence = "low"
+    else:
+        confidence = "unknown"
+    return combined, confidence
 
 
 def process_turn(query, history, awaiting):
@@ -185,6 +306,9 @@ def process_turn(query, history, awaiting):
         return TICKET_RAISED_MESSAGE, None
     # anything else: clear awaiting, fall through and treat this message as a new question
 
+    if is_filler(query):
+        return "No worries! Let me know whenever you have a question about Geometra.", None
+
     # Pass 1 — Understand. Always gets recent history (not just when awaiting ==
     # "clarification" as the original diagram showed) - stress-testing found that a
     # short follow-up referencing the previous NORMAL answer (not just a clarifying
@@ -194,8 +318,9 @@ def process_turn(query, history, awaiting):
     # very little and closes that gap.
     reformulated_query, intent = understand(query, history)
 
-    # Fast-path scope check: ONE retrieve() call, reused for both the gate and Pass 2
-    chunks, confidence = retrieve(reformulated_query)
+    # Fast-path scope check: ONE retrieve() call, reused for both the gate and Pass 2.
+    # retrieve_combined() also pulls in the isolated website knowledge (see website_kb.py).
+    chunks, confidence = retrieve_combined(reformulated_query)
     top1 = chunks[0].similarity_score if chunks else 0.0
     keyword_hit = is_query_relevant(query)
     if not keyword_hit and top1 < FAST_PATH_SIMILARITY:
@@ -212,9 +337,14 @@ def process_turn(query, history, awaiting):
     if stripped.startswith("[CLARIFY]"):
         return stripped[len("[CLARIFY]"):].strip(), "clarification"
     if stripped.startswith("[CANNOT_ANSWER]"):
+        # Warmer than a flat "I don't have enough information" - the customer's question
+        # was clear, the FAQ just genuinely doesn't cover it, so this should read as "I
+        # won't guess and get it wrong for you," not as a dead end.
         return (
-            "I don't have enough information to answer that. Would you like me to raise "
-            "a support ticket for you? (yes/no)"
+            "That's a fair question, and I'd rather not guess and risk giving you the "
+            "wrong answer. I don't have that specific detail available to me right now, "
+            "but I can raise a support ticket so our team follows up with you directly "
+            "with an accurate answer. Would you like me to do that? (yes/no)"
         ), "ticket_confirmation"
     return response, None
 
