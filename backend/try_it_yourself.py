@@ -248,22 +248,13 @@ above (a desk is not a weapon or sports equipment).
    closets, shelves, dining tables, desks, TV units, pooja mandirs, quadrilaterals, angular
    (non-curved) arches, electrical outlets, sockets, AC fitting outlets, photo frames,
    cabinets (outside only), plumbing points, washbasins, commodes, drains, cooking
-   areas, gas stoves, kitchen cabinets, ceilings, floors, mannequins, statues, dolls,
-   and stuffed toys. Arches count only when they're angular/quadrilateral in shape -
-   a rounded or curved arch falls under
+   areas, gas stoves, kitchen cabinets, ceilings, floors. Arches count only when they're
+   angular/quadrilateral in shape - a rounded or curved arch falls under
    the curved-surface exclusion above, not this list.
    State this confidently when an object clearly meets every requirement above - do not
    decline or hedge just because that specific object isn't named in the retrieved
    context, as long as it passes all of these checks.
-   Worked example - "Can I measure a life-size mannequin for a store display?" is
-   answered "Yes, you can measure a mannequin with Geometra." NOT "no, it's a living
-   thing" and NOT "no, it's a representation of something alive." A mannequin is a
-   solid manufactured object, full stop - the fact that it depicts a human shape is
-   irrelevant to whether it's alive, in the same way a photo of a person or a portrait
-   painting isn't alive either. Treat this example as binding: any answer that declines
-   to measure a mannequin, statue, or doll by reasoning about it being "alive," a
-   "living thing," or a "representation of a living thing" is wrong, regardless of how
-   that reasoning is phrased.
+   Mannequins, statues, dolls, and stuffed toys/animals are NOT measurable - see Rule 8C.
 
 8B. MULTI-SIDED / N-CORNER SURFACES: "At least 3 visible corners" is the specific case
    for a standard 4-sided wall (N=4 corners, N-1=3 must be visible). This generalizes:
@@ -278,15 +269,19 @@ above (a desk is not a weapon or sports equipment).
 8C. CANNOT MEASURE: Regardless of shape or corner visibility, Geometra CANNOT measure:
    - Vehicles or anything in motion (cars, buses, trains, bikes, cycles, moving objects)
    - A real, living organism, currently alive (a human, an animal, an insect, a plant,
-     a tree). Solid manufactured objects are never covered by this bullet no matter what
-     they depict or resemble - see Rule 8's examples list.
+     a tree).
+   - Mannequins, statues, dolls, and stuffed toys/animals - excluded as representations
+     of a living thing, separately from the living-organism bullet above (these aren't
+     alive, but are still not measurable).
    - Liquids, water bodies, containers of liquid, or natural elements - this includes
      ANY liquid or anything holding one, even if the container itself looks like a
      measurable closed shape: swimming pools (even empty-looking ones, and especially
      ones full of water), ponds, lakes, oceans, rivers, beer mugs, rooftop water tanks,
      rain, wind, fire, dust, mud, sand. A pool is excluded because of what it is
      (a liquid feature), not because of its shape - do not reason "it's a closed
-     rectangular shape so it's measurable" for a pool, tank, or any liquid vessel.
+     rectangular shape so it's measurable" for a pool, tank, or any liquid vessel. This
+     covers bottles and water bottles too - a bottle is a liquid container regardless
+     of whether it's currently full, empty, open, or closed.
    - Small handheld or loose items (pens, pencils, phones, laptops, tablets, books,
      headphones, wires, scissors, computer peripherals, printers, microwaves, toys,
      utensils, musical instruments, cosmetics, currency/coins, food, clothes, luggage,
@@ -335,7 +330,12 @@ above (a desk is not a weapon or sports equipment).
 
 8E. MARKER CARE & PRINTING: The marker must not be bent, folded, or damaged - replace it
    if it is. A laser printer is recommended for printing it; a well-maintained inkjet
-   printer works but is not recommended; a dot matrix printer must never be used.
+   printer works but is not recommended; a dot matrix printer must never be used. If the
+   customer names a specific printer model (e.g. "Epson LX-310"), you may use general
+   knowledge - not just the CONTEXT below - to identify whether that model is a laser,
+   inkjet, or dot matrix printer, then answer using the rule above. This is the one
+   exception to Rule 1's context-only restriction, since Rule 1 can't list every printer
+   model by name. If you don't recognize the model, say so rather than guessing.
    Geometra can only measure what is actually visible in the photo - anything out of
    frame or obscured cannot be measured.
 
@@ -438,16 +438,12 @@ def is_injection_attempt(text: str) -> bool:
     return bool(_INJECTION_PATTERN.search(text))
 
 
-# Found via manual testing to be uniquely fragile: no matter how the prompt phrased it
-# (an exception clause, a relocated positive example, a "binding worked example" that
-# did reach 10/10 in isolation), asking about a mannequin/statue/doll kept regressing
-# back to "it's a living thing" every time UNRELATED prompt content changed elsewhere -
-# strong evidence the model has a persistent prior that human-shaped objects are
-# borderline-alive, resistant to in-context correction. Rather than keep re-fighting
-# this with more prompt text (which risks degrading yet another rule the same way),
-# this answers it deterministically in code, bypassing Pass 1/2 for this one narrow,
-# well-understood pattern - the same reasoning as is_severe_slur()/is_injection_attempt(),
-# applied to a reliability problem instead of a safety one.
+# Business rule: mannequins/statues/dolls/stuffed toys are NOT measurable - excluded as
+# representations of a living thing (Rule 8C). Found via manual testing to be uniquely
+# fragile as a prompt-only rule: no matter how it was phrased, this kept regressing
+# every time UNRELATED prompt content changed elsewhere. Answered deterministically in
+# code instead, bypassing Pass 1/2, the same reasoning as is_severe_slur()/
+# is_injection_attempt() applied to a reliability problem instead of a safety one.
 _SOLID_REPRESENTATION_PATTERN = re.compile(
     r"\b(mannequin|mannequins|statue|statues|dolls?|stuffed\s+(animal|toy)s?)\b",
     re.IGNORECASE,
@@ -459,6 +455,80 @@ def is_solid_representation_question(text: str) -> bool:
     return bool(_SOLID_REPRESENTATION_PATTERN.search(lowered)) and (
         "measure" in lowered or "measuring" in lowered
     )
+
+
+# Same reliability ceiling as the mannequin case, but for the CANNOT-measure side: even
+# items explicitly named in Rule 8C's own exclusion list (a tablet, a tree, a toy) kept
+# getting a clarifying question instead of a direct "no." Handled deterministically for
+# the same reason - short and precise beats more prompt text. Gated to fresh questions
+# (awaiting is None) so it can't misfire mid-conversation on an unrelated mention (e.g.
+# "measuring on my tablet" during troubleshooting).
+_EXCLUDED_CATEGORIES = (
+    (
+        re.compile(
+            r"\b(cars?|buses|trains?|bikes?|bicycles?|cycles?|motorcycles?|scooters?|"
+            r"trucks?|vehicles?)\b",
+            re.IGNORECASE,
+        ),
+        "it's a vehicle",
+    ),
+    (
+        re.compile(
+            r"\b(trees?|plants?|dogs?|cats?|humans?|persons?|people|animals?|insects?|"
+            r"birds?|flowers?)\b",
+            re.IGNORECASE,
+        ),
+        "it's a living thing",
+    ),
+    (
+        re.compile(
+            r"\b(water\s*bottles?|bottles?|swimming\s*pools?|pools?|ponds?|lakes?|"
+            r"oceans?|rivers?|mugs?|tanks?|aquariums?|fish\s*tanks?)\b",
+            re.IGNORECASE,
+        ),
+        "it's a liquid or a liquid container",
+    ),
+    (
+        re.compile(
+            r"\b(pens?|pencils?|phones?|smartphones?|laptops?|tablets?|ipads?|books?|"
+            r"headphones?|earphones?|wires?|scissors|printers?|microwaves?|toys?|"
+            r"utensils?|cosmetics?|currency|coins?|clothes|clothing|luggage|bags?|"
+            r"garbage|globes?|curtains?|paintbrush(es)?|torches?|needles?|remotes?|"
+            r"keyboards?|mouse|umbrellas?)\b",
+            re.IGNORECASE,
+        ),
+        "it's a small handheld or loose item",
+    ),
+    (
+        re.compile(r"\b(mirrors?|glass)\b", re.IGNORECASE),
+        "it's a reflective or transparent surface",
+    ),
+    (
+        re.compile(
+            r"\b(mountains?|monuments?|towers?|poles?|zoos?|race\s*tracks?|streets?)\b",
+            re.IGNORECASE,
+        ),
+        "it's a standalone outdoor structure, not part of a room or hall",
+    ),
+    (
+        re.compile(
+            r"\b(knives?|knife|swords?|guns?|pistols?|rifles?|daggers?|screwdrivers?|"
+            r"hammers?|wrenches?|blades?)\b",
+            re.IGNORECASE,
+        ),
+        "it's a weapon or tool",
+    ),
+)
+
+
+def find_definite_exclusion_reason(text: str) -> str | None:
+    lowered = text.lower()
+    if "measure" not in lowered and "measuring" not in lowered:
+        return None
+    for pattern, reason in _EXCLUDED_CATEGORIES:
+        if pattern.search(lowered):
+            return reason
+    return None
 
 
 # Prompt wording alone couldn't get Pass 2 to reliably use the literal [CLARIFY] tag in
@@ -673,11 +743,23 @@ def process_turn(query, history, awaiting):
     # matter how the prompt was worded.
     if is_solid_representation_question(query):
         return (
-            "Yes, you can measure that with Geometra - it's a solid manufactured "
-            "object, not a living thing, so it's treated just like any other piece of "
-            "furniture. Just make sure it's a closed shape, larger than an A4 sheet, "
-            "and that the marker is placed with enough corners visible in the photo."
+            "No, Geometra cannot measure that - it's a representation of a living "
+            "thing (a mannequin, statue, doll, or stuffed toy), which isn't "
+            "measurable. Let me know if there's something else in the room I can "
+            "help you measure instead."
         ), None
+
+    # See find_definite_exclusion_reason() - a fresh question about an item explicitly on
+    # Rule 8C's cannot-measure list (a tablet, a tree, a toy...) kept getting a clarifying
+    # question instead of a direct no, even though the item was already named in the
+    # prompt. Answered deterministically instead of adding more prompt text.
+    if awaiting is None:
+        exclusion_reason = find_definite_exclusion_reason(query)
+        if exclusion_reason:
+            return (
+                f"No, Geometra cannot measure that - {exclusion_reason}. Let me know "
+                "if there's something else in the room I can help you measure instead."
+            ), None
 
     # A genuine troubleshooting attempt was already given last turn (see the
     # already_clarified handling below) - checked here, in code, rather than leaving Pass
