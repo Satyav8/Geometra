@@ -690,7 +690,14 @@ def retrieve_combined(query_text):
     directly, so the production retrieve() path used by routers/chat.py is untouched."""
     faq_chunks, _ = retrieve(query_text)
     query_embedding = embed_text(query_text)
-    website_results = website_kb.query(query_embedding, top_k=5)
+    try:
+        website_results = website_kb.query(query_embedding, top_k=5)
+    except Exception as e:
+        # geometra_website's Qdrant collection can end up built with a different vector
+        # size than the currently configured embedding backend (e.g. local 384-dim vs
+        # OpenAI's 1536-dim) - never let that take down the whole response.
+        print(f"[website_kb] query failed, continuing with FAQ-only results: {e}")
+        website_results = []
     website_chunks = [
         SourceChunk(
             chunk_id=r["chunk_id"], section=r["section"], text=r["text"],
