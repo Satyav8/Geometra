@@ -43,3 +43,10 @@ create table if not exists evaluation_logs (
 create index if not exists idx_messages_session_id on messages(session_id);
 create index if not exists idx_evaluation_logs_message_id on evaluation_logs(message_id);
 create index if not exists idx_unknown_questions_reviewed on unknown_questions(reviewed);
+
+-- Phase 2 (awaiting / ticket-confirmation session state for the two-pass flow) — written
+-- during the local two-pass port, NOT yet applied to the live Supabase project. Apply
+-- manually via the Supabase SQL Editor only after local behavior is reviewed and approved.
+alter table sessions add column if not exists awaiting text;
+alter table sessions add column if not exists pending_ticket_query text;
+alter table sessions add column if not exists pending_ticket_similarity real;

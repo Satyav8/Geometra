@@ -33,7 +33,8 @@ def _call_groq(system_prompt: str, user_message: str) -> Tuple[str, int, int]:
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_message},
         ],
-        temperature=0.2,
+        temperature=0.5,
+        top_p=0.9,
     )
     text = completion.choices[0].message.content
     usage = completion.usage
@@ -50,7 +51,8 @@ def _call_openai(system_prompt: str, user_message: str) -> Tuple[str, int, int]:
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_message},
         ],
-        temperature=0.2,
+        temperature=0.5,
+        top_p=0.9,
     )
     text = completion.choices[0].message.content
     usage = completion.usage
@@ -75,7 +77,7 @@ def _call_anthropic(system_prompt: str, user_message: str) -> Tuple[str, int, in
     client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
     message = client.messages.create(
         model=LLM_MODEL,
-        max_tokens=1024,
+        max_tokens=10000,
         system=system_prompt,
         messages=[{"role": "user", "content": user_message}],
     )

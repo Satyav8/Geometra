@@ -27,6 +27,48 @@ def ensure_session(session_id: str) -> None:
     requests.post(_url("sessions"), headers=headers, json={"session_id": session_id}, timeout=10)
 
 
+# Prepared for the two-pass flow's session state, mirroring database_sqlite.py's
+# get_session_state/set_session_state. Inert until the `awaiting`/pending_ticket_* columns
+# (see data/supabase_main_schema.sql) are actually applied to the live project - not part
+# of this phase.
+_UNSET = object()
+
+
+def get_session_state(session_id: str) -> dict:
+    params = {
+        "session_id": f"eq.{session_id}",
+        "select": "awaiting,pending_ticket_query,pending_ticket_similarity",
+    }
+    resp = requests.get(_url("sessions"), headers=BASE_HEADERS, params=params, timeout=10)
+    resp.raise_for_status()
+    rows = resp.json()
+    row = rows[0] if rows else {}
+    return {
+        "awaiting": row.get("awaiting"),
+        "pending_ticket_query": row.get("pending_ticket_query"),
+        "pending_ticket_similarity": row.get("pending_ticket_similarity"),
+    }
+
+
+def set_session_state(
+    session_id: str,
+    awaiting: Optional[str],
+    pending_ticket_query=_UNSET,
+    pending_ticket_similarity=_UNSET,
+) -> None:
+    payload = {"awaiting": awaiting}
+    if pending_ticket_query is not _UNSET:
+        payload["pending_ticket_query"] = pending_ticket_query
+    if pending_ticket_similarity is not _UNSET:
+        payload["pending_ticket_similarity"] = pending_ticket_similarity
+    headers = {**BASE_HEADERS, "Prefer": "return=minimal"}
+    resp = requests.patch(
+        _url("sessions"), headers=headers, params={"session_id": f"eq.{session_id}"},
+        json=payload, timeout=10,
+    )
+    resp.raise_for_status()
+
+
 def increment_session_turns(session_id: str) -> None:
     resp = requests.get(
         _url("sessions"), headers=BASE_HEADERS,

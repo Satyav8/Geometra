@@ -2,17 +2,47 @@ import re
 from typing import Dict, List, Optional
 
 from config import (
+    CLARIFY_DECLINE_PROMPT_MESSAGE,
     FALLBACK_MESSAGE,
+    FILLER_RESPONSE_MESSAGE,
+    GRATITUDE_MESSAGE,
+    GREETING_MESSAGE,
+    MANNEQUIN_EXCLUSION_MESSAGE,
     OUT_OF_SCOPE_MESSAGE,
+    SAFETY_REFUSAL_MESSAGE,
+    TICKET_DECLINED_MESSAGE,
+    TICKET_ESCALATION_MESSAGE,
+    TICKET_OFFER_MESSAGE,
     ALLOWED_PRICE_NUMBERS,
     LOW_CONFIDENCE_THRESHOLD,
     MIN_COMPLETENESS_WORDS,
 )
 from database import count_session_messages, get_message_by_id, get_session_message_flags
 from llm.guardrails import BANNED_PHRASES, _extract_numbers
+from llm.two_pass import looks_like_clarify_question
 from models import EvaluationResult, SourceChunk
 
 CITATION_RE = re.compile(r"\[Source:\s*([^\]]+)\]")
+
+# Two-pass flow messages that carry no factual claims of their own (fixed text, or a
+# clarifying/ticket-offer question) - added alongside the original FALLBACK_MESSAGE/
+# OUT_OF_SCOPE_MESSAGE check below so metrics like answer_faithfulness don't mis-score a
+# ticket offer or clarifying question as an ungrounded hallucination. Purely additive: the
+# original two-value check still passes everything it always did.
+_FIXED_NON_SUBSTANTIVE_MESSAGES = {
+    FALLBACK_MESSAGE, OUT_OF_SCOPE_MESSAGE, TICKET_OFFER_MESSAGE, TICKET_ESCALATION_MESSAGE,
+    SAFETY_REFUSAL_MESSAGE, MANNEQUIN_EXCLUSION_MESSAGE, TICKET_DECLINED_MESSAGE,
+    CLARIFY_DECLINE_PROMPT_MESSAGE, FILLER_RESPONSE_MESSAGE, GRATITUDE_MESSAGE, GREETING_MESSAGE,
+}
+
+
+def _is_non_substantive(response: str) -> bool:
+    stripped = response.strip()
+    if stripped in _FIXED_NON_SUBSTANTIVE_MESSAGES:
+        return True
+    if stripped.startswith("Unfortunately, Geometra isn't able to measure that"):
+        return True  # dynamic exclusion-category/mannequin-style message
+    return looks_like_clarify_question(stripped)
 
 
 def _result(metric_name: str, passed: bool, score: Optional[float], detail: str) -> EvaluationResult:
@@ -29,7 +59,7 @@ def retrieval_precision(chunks: List[SourceChunk]) -> EvaluationResult:
 
 
 def answer_faithfulness(response: str, chunks: List[SourceChunk]) -> EvaluationResult:
-    if response.strip() in (FALLBACK_MESSAGE, OUT_OF_SCOPE_MESSAGE):
+    if _is_non_substantive(response):
         return _result("answer_faithfulness", True, 1.0, "Fallback/scope response — no factual claims to verify")
 
     chunk_words = set(re.findall(r"[a-z0-9]+", " ".join(c.text for c in chunks).lower()))
@@ -57,7 +87,7 @@ def answer_faithfulness(response: str, chunks: List[SourceChunk]) -> EvaluationR
 def answer_completeness(query: str, response: str) -> EvaluationResult:
     if "?" not in query:
         return _result("answer_completeness", True, None, "Query is not a question — not applicable")
-    if response.strip() in (FALLBACK_MESSAGE, OUT_OF_SCOPE_MESSAGE):
+    if _is_non_substantive(response):
         return _result("answer_completeness", True, None, "Fixed fallback/scope message — not applicable")
     word_count = len(response.split())
     passed = word_count > MIN_COMPLETENESS_WORDS
@@ -68,7 +98,7 @@ def answer_completeness(query: str, response: str) -> EvaluationResult:
 
 
 def hallucination_rate(response: str, chunks: List[SourceChunk]) -> EvaluationResult:
-    if response.strip() in (FALLBACK_MESSAGE, OUT_OF_SCOPE_MESSAGE):
+    if _is_non_substantive(response):
         return _result("hallucination_rate", True, 0.0, "Fallback/scope response — no numbers to verify")
     chunk_numbers = set()
     for chunk in chunks:
@@ -79,7 +109,7 @@ def hallucination_rate(response: str, chunks: List[SourceChunk]) -> EvaluationRe
 
 
 def source_citation_accuracy(response: str, chunks: List[SourceChunk]) -> EvaluationResult:
-    if response.strip() in (FALLBACK_MESSAGE, OUT_OF_SCOPE_MESSAGE):
+    if _is_non_substantive(response):
         return _result("source_citation_accuracy", True, None, "No citation required for fallback/scope response")
     match = CITATION_RE.search(response)
     if not match:
@@ -135,7 +165,7 @@ def price_accuracy(response: str) -> EvaluationResult:
 
 
 def numerical_accuracy(response: str, chunks: List[SourceChunk]) -> EvaluationResult:
-    if response.strip() in (FALLBACK_MESSAGE, OUT_OF_SCOPE_MESSAGE):
+    if _is_non_substantive(response):
         return _result("numerical_accuracy", True, 0.0, "Fallback/scope response — no numbers to verify")
     chunk_numbers = set()
     for chunk in chunks:
