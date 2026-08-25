@@ -24,10 +24,16 @@ NUMBER_RE = re.compile(r"\d+(?:\.\d+)?")
 # but aren't facts — strip them before extracting numbers, or every numbered-list answer
 # false-positives the hallucination check.
 LIST_MARKER_RE = re.compile(r"^\s*\d+\.\s+", re.MULTILINE)
+# The two-pass flow's [CLARIFY] format numbers its two questions inline within a sentence
+# ("...interiors! 1) Are you... 2) Could you..."), not as a line-start list like
+# LIST_MARKER_RE expects - every clarifying question was false-positiving as containing
+# unverified numbers ("1", "2") until this was added.
+CLARIFY_MARKER_RE = re.compile(r"\b\d+\)\s+")
 
 
 def _extract_numbers(text: str) -> List[float]:
     text = LIST_MARKER_RE.sub("", text)
+    text = CLARIFY_MARKER_RE.sub("", text)
     return [float(n) for n in NUMBER_RE.findall(text)]
 
 
