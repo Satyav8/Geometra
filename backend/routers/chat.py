@@ -7,35 +7,25 @@ from fastapi import APIRouter, HTTPException
 from config import (
     CHECK_IN_MESSAGE,
     ESCALATION_TURN_THRESHOLD,
-    FALLBACK_MESSAGE,
-    GRATITUDE_MESSAGE,
-    GREETING_MESSAGE,
-    OUT_OF_SCOPE_MESSAGE,
     SUPPORT_EMAIL,
     TICKET_RAISED_MESSAGE,
 )
 from database import (
     ensure_session,
     get_session_messages,
+    get_session_state,
     increment_session_turns,
+    set_session_state,
     write_evaluation_logs,
     write_message,
     write_unknown_question,
 )
 from evaluation.metrics import evaluate_core_metrics, sqlite_log_integrity
-from llm.client import call_llm
-from llm.guardrails import (
-    check_fallback_leakage,
-    check_numerical_hallucination,
-    check_response_length,
-    check_uncertainty_language,
-)
-from llm.prompts import SYSTEM_PROMPT, build_user_message
 from integrations.resend_client import send_ticket_email
 from integrations.supabase_client import write_escalated_question
+from llm.two_pass import process_turn
 from models import ChatRequest, ChatResponse, SourceChunk
-from rag.relevance import compute_criticality, is_gratitude, is_greeting, is_query_relevant
-from rag.retriever import retrieve
+from rag.relevance import compute_criticality
 from rag.spelling import correct_query
 
 router = APIRouter()
@@ -59,62 +49,64 @@ def chat(request: ChatRequest) -> ChatResponse:
 
     ensure_session(request.session_id)
 
-    # Typo-corrected text drives retrieval/relevance/the LLM prompt (a misspelled word
-    # can otherwise tank embedding similarity or miss a keyword match); the customer's
-    # original raw text is still what gets stored/escalated, so records stay verbatim.
+    # Typo-corrected text drives retrieval/relevance/the LLM prompt inside process_turn();
+    # the customer's original raw text (request.query) is still what gets stored/escalated.
     query = correct_query(request.query)
 
-    sources: List[SourceChunk] = []
-    input_tokens = 0
-    output_tokens = 0
+    session_state = get_session_state(request.session_id)
+    awaiting = session_state["awaiting"]
+
+    history = []
+    for row in get_session_messages(request.session_id):
+        history.append(("customer", row["query"]))
+        history.append(("sam", row["response"]))
+
+    result = process_turn(
+        query, request.query, history, awaiting,
+        existing_pending_query=session_state["pending_ticket_query"],
+        existing_pending_similarity=session_state["pending_ticket_similarity"],
+    )
+
+    response = result.response
+    chunks = result.chunks
+    confidence_level = result.confidence_level
+    sources: List[SourceChunk] = chunks if result.show_sources else []
     is_unknown_question = False
+    ticket_number = None
 
-    is_gratitude_turn = is_gratitude(query)
-    is_greeting_turn = is_greeting(query)
-    if is_gratitude_turn:
-        # Courtesy close — no need to hit retrieval or the LLM for this.
-        chunks = []
-        confidence_level = "high"
-        is_relevant = True
-        response = GRATITUDE_MESSAGE
-    elif is_greeting_turn:
-        # Plain "Hi"/"Hello" with nothing else — greet back, no retrieval needed. Only
-        # fires when the WHOLE message is just a greeting (see is_greeting), so "Hi, how
-        # much does it cost?" still gets treated as a real question, not short-circuited.
-        chunks = []
-        confidence_level = "high"
-        is_relevant = True
-        response = GREETING_MESSAGE
-    else:
-        chunks, confidence_level = retrieve(query)
-        is_relevant = is_query_relevant(query)
-
-        if confidence_level == "unknown":
-            if is_relevant:
-                # On-topic, but the knowledge base doesn't cover it — flag for the team.
-                response = FALLBACK_MESSAGE
-                is_unknown_question = True
-            else:
-                # Not about Geometra at all — reject outright, nothing for the team to review.
-                response = OUT_OF_SCOPE_MESSAGE
-        else:
-            sources = chunks
-            user_message = build_user_message(query, chunks, confidence_level)
-            response, input_tokens, output_tokens = call_llm(SYSTEM_PROMPT, user_message)
-
-            response, _ = check_fallback_leakage(response)
-            response, _ = check_uncertainty_language(response)
-            response, _ = check_response_length(response)
-            response, _ = check_numerical_hallucination(response, chunks)
-
-    # The LLM can independently land on the exact fallback sentence (Rule 2) even at
-    # "low" confidence, not just via the hardcoded "unknown" branch above. Either way,
-    # the response promises the team was notified — so treat it as unknown consistently.
-    if response.strip() == FALLBACK_MESSAGE:
+    # A confirmed ticket only exists on the turn the customer says "yes" - the question
+    # being escalated is whatever was held from the turn that actually triggered the
+    # offer (see llm/two_pass.py's pending_query), not the "yes" itself.
+    if result.raise_ticket_now:
+        ticket_query = session_state["pending_ticket_query"] or request.query
+        ticket_similarity = session_state["pending_ticket_similarity"] or 0.0
+        unknown_question_id = write_unknown_question(request.session_id, ticket_query, ticket_similarity)
+        ticket_number = f"GEO-{unknown_question_id:03d}"
+        response = TICKET_RAISED_MESSAGE.format(ticket_number=ticket_number)
+        write_escalated_question(
+            question=ticket_query,
+            criticality=compute_criticality(ticket_similarity),
+            similarity_score=ticket_similarity,
+            session_id=request.session_id,
+            turn_number=request.turn_number,
+        )
         is_unknown_question = True
 
-    response_latency_ms = int((time.time() - start_time) * 1000)
+    if result.update_pending:
+        set_session_state(
+            request.session_id, result.new_awaiting,
+            pending_ticket_query=result.pending_query,
+            pending_ticket_similarity=result.pending_similarity,
+        )
+    else:
+        set_session_state(request.session_id, result.new_awaiting)
 
+    response_latency_ms = int((time.time() - start_time) * 1000)
+    # Retrieval only ran on the Pass 1/2 branch - confidence_level == "unknown" there means
+    # the fast-path scope gate rejected it as off-topic. Every deterministic short-circuit
+    # branch reports "high" (see llm/two_pass.py's _short_circuit), which is treated as
+    # relevant here too - none of them are the off-topic rejection case.
+    is_relevant = confidence_level != "unknown"
     evaluation = evaluate_core_metrics(
         query=query,
         response=response,
@@ -124,41 +116,15 @@ def chat(request: ChatRequest) -> ChatResponse:
         session_id=request.session_id,
         turn_number=request.turn_number,
         response_latency_ms=response_latency_ms,
-        input_tokens=input_tokens,
+        input_tokens=result.input_tokens,
     )
 
-    # On-topic-but-uncovered question: raise a ticket (the new unknown_questions row id
-    # becomes the ticket number) and swap the generic fallback text for one that tells
-    # the customer a ticket was actually raised, with the number and turnaround time.
-    ticket_number = None
-    if is_unknown_question:
-        top1 = chunks[0].similarity_score if chunks else 0.0
-        unknown_question_id = write_unknown_question(request.session_id, request.query, top1)
-        ticket_number = f"GEO-{unknown_question_id:03d}"
-        response = TICKET_RAISED_MESSAGE.format(ticket_number=ticket_number)
-        write_escalated_question(
-            question=request.query,
-            criticality=compute_criticality(top1),
-            similarity_score=top1,
-            session_id=request.session_id,
-            turn_number=request.turn_number,
-        )
-
-    # Metrics above evaluate the substantive answer only; this check-in nudge is UX,
-    # appended after so it doesn't skew hallucination/citation/etc. scoring. Skipped on
-    # a gratitude or plain-greeting turn — neither implies an actual question was asked
-    # yet, so "has this resolved your query?" right after would be contradictory/odd.
-    is_check_in_turn = (
-        request.turn_number == ESCALATION_TURN_THRESHOLD
-        and not is_gratitude_turn
-        and not is_greeting_turn
-    )
+    # The turn-6 nudge only makes sense after a genuine substantive answer - not right
+    # after a greeting, a ticket offer, a refusal, or a clarifying question of our own.
+    is_check_in_turn = request.turn_number == ESCALATION_TURN_THRESHOLD and not result.skip_check_in
     if is_check_in_turn:
         response = response + CHECK_IN_MESSAGE
 
-    # Frontend renders this as a clickable "email support" button — offered whenever
-    # the fallback text is shown, or on the 6-turn check-in. Not shown for the hard
-    # out-of-scope rejection (that's off-topic chatter, not a knowledge gap).
     support_email = SUPPORT_EMAIL if (is_unknown_question or is_check_in_turn) else None
 
     message_id = write_message(
@@ -171,8 +137,8 @@ def chat(request: ChatRequest) -> ChatResponse:
         confidence_level=confidence_level,
         is_unknown_question=is_unknown_question,
         response_latency_ms=response_latency_ms,
-        input_tokens=input_tokens,
-        output_tokens=output_tokens,
+        input_tokens=result.input_tokens,
+        output_tokens=result.output_tokens,
     )
 
     if is_unknown_question:
@@ -189,8 +155,8 @@ def chat(request: ChatRequest) -> ChatResponse:
             "confidence_level": confidence_level,
             "is_unknown_question": is_unknown_question,
             "response_latency_ms": response_latency_ms,
-            "input_tokens": input_tokens,
-            "output_tokens": output_tokens,
+            "input_tokens": result.input_tokens,
+            "output_tokens": result.output_tokens,
         },
     )
     evaluation.append(integrity_result)
@@ -207,7 +173,7 @@ def chat(request: ChatRequest) -> ChatResponse:
         is_unknown_question=is_unknown_question,
         evaluation=evaluation,
         response_latency_ms=response_latency_ms,
-        input_tokens=input_tokens,
-        output_tokens=output_tokens,
+        input_tokens=result.input_tokens,
+        output_tokens=result.output_tokens,
         support_email=support_email,
     )

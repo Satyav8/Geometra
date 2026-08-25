@@ -39,6 +39,11 @@ TOP_K_CHUNKS = int(os.getenv("TOP_K_CHUNKS", "15"))
 # in a clean gap, so no threshold change was needed when switching embedding backends.
 MIN_SIMILARITY_SCORE = float(os.getenv("MIN_SIMILARITY_SCORE", "0.30"))
 LOW_CONFIDENCE_THRESHOLD = float(os.getenv("LOW_CONFIDENCE_THRESHOLD", "0.60"))
+# Two-pass flow's fast-path scope gate: keyword hit OR similarity >= this value counts as
+# in-scope, no LLM spent otherwise. Loosened from MIN_SIMILARITY_SCORE (0.30) after testing
+# on backend/try_it_yourself.py found 0.30 alone rejected some legitimate on-topic phrasings
+# that only had a keyword match, not a strong embedding match.
+FAST_PATH_SIMILARITY_THRESHOLD = float(os.getenv("FAST_PATH_SIMILARITY_THRESHOLD", "0.15"))
 
 # Vector DB — "chroma" (default, local dev/tests) or "qdrant" (production). Same
 # reasoning as DATABASE_BACKEND: local dev/tests stay fast and offline.
@@ -124,3 +129,48 @@ CHECK_IN_MESSAGE = (
     "\n\nHas this resolved your query? If it hasn't, please contact our support "
     "team through email and we'll help you further."
 )
+
+# Two-pass flow messages — ported from backend/try_it_yourself.py (Testing branch) after
+# extensive manual testing. See llm/two_pass.py for how each of these is triggered.
+SAFETY_REFUSAL_MESSAGE = (
+    "I can't help with that. This chat is here for genuine, respectful questions about "
+    "using Geometra to measure interior spaces and objects - happy to help if you have "
+    "one of those."
+)
+
+MANNEQUIN_EXCLUSION_MESSAGE = (
+    "Unfortunately, Geometra isn't able to measure that - mannequins, statues, dolls, and "
+    "stuffed toys fall under representations of a living thing, which are outside what "
+    "Geometra supports. I'd be happy to help with anything else in the room you'd like "
+    "measured!"
+)
+
+EXCLUDED_ITEM_MESSAGE_TEMPLATE = (
+    "Unfortunately, Geometra isn't able to measure that since {reason}. I'd be happy to "
+    "help with anything else in the room you'd like measured!"
+)
+
+TICKET_OFFER_MESSAGE = (
+    "That's a fair question, and I'd rather not guess and risk giving you the "
+    "wrong answer. I don't have that specific detail available to me right now, "
+    "but I can raise a support ticket so our team follows up with you directly "
+    "with an accurate answer. Would you like me to do that? (yes/no)"
+)
+
+# Separate wording for the deterministic escalation checks in llm/two_pass.py - those
+# trigger on a REQUEST ("please raise a ticket," "I already tried, no response"), not an
+# unanswered QUESTION, so TICKET_OFFER_MESSAGE's "that's a fair question... I don't have
+# that detail" doesn't fit - there's no question being dodged.
+TICKET_ESCALATION_MESSAGE = (
+    "I hear you, and I don't want to keep going back and forth without getting you "
+    "real help. I can raise a support ticket so our team follows up with you directly. "
+    "Would you like me to go ahead? (yes/no)"
+)
+
+TICKET_DECLINED_MESSAGE = (
+    "No problem, I won't raise a ticket. Let me know if there's anything else I can help with!"
+)
+
+CLARIFY_DECLINE_PROMPT_MESSAGE = "No worries — what would you like me to clarify or help with instead?"
+
+FILLER_RESPONSE_MESSAGE = "No worries! Let me know whenever you have a question about Geometra."

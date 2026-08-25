@@ -71,10 +71,24 @@ def get_cursor(commit: bool = False):
         conn.close()
 
 
+def _ensure_sessions_columns(conn) -> None:
+    """SQLite has no ADD COLUMN IF NOT EXISTS, so check-then-alter. Safe and non-
+    destructive to run on every startup - existing rows get NULL for the new columns."""
+    existing = {row[1] for row in conn.execute("PRAGMA table_info(sessions)").fetchall()}
+    for column, coltype in (
+        ("awaiting", "TEXT"),
+        ("pending_ticket_query", "TEXT"),
+        ("pending_ticket_similarity", "REAL"),
+    ):
+        if column not in existing:
+            conn.execute(f"ALTER TABLE sessions ADD COLUMN {column} {coltype}")
+
+
 def init_db():
     conn = get_connection()
     try:
         conn.executescript(SCHEMA)
+        _ensure_sessions_columns(conn)
         conn.commit()
     finally:
         conn.close()
@@ -85,6 +99,47 @@ def ensure_session(session_id: str) -> None:
         cur.execute(
             "INSERT OR IGNORE INTO sessions (session_id) VALUES (?)", (session_id,)
         )
+
+
+_UNSET = object()
+
+
+def get_session_state(session_id: str) -> dict:
+    """Reads the two-pass flow's per-session state: `awaiting` (None / "clarification" /
+    "ticket_confirmation" / "troubleshoot_given") and the question/similarity held for a
+    pending ticket confirmation, if any."""
+    with get_cursor() as cur:
+        cur.execute(
+            "SELECT awaiting, pending_ticket_query, pending_ticket_similarity "
+            "FROM sessions WHERE session_id = ?",
+            (session_id,),
+        )
+        row = cur.fetchone()
+        if row is None:
+            return {"awaiting": None, "pending_ticket_query": None, "pending_ticket_similarity": None}
+        return dict(row)
+
+
+def set_session_state(
+    session_id: str,
+    awaiting: Optional[str],
+    pending_ticket_query=_UNSET,
+    pending_ticket_similarity=_UNSET,
+) -> None:
+    """Always updates `awaiting`. The two pending_ticket_* fields are left untouched
+    unless explicitly passed (a turn that isn't resolving a ticket confirmation shouldn't
+    silently wipe out a question that's still awaiting confirmation)."""
+    sets = ["awaiting = ?"]
+    values = [awaiting]
+    if pending_ticket_query is not _UNSET:
+        sets.append("pending_ticket_query = ?")
+        values.append(pending_ticket_query)
+    if pending_ticket_similarity is not _UNSET:
+        sets.append("pending_ticket_similarity = ?")
+        values.append(pending_ticket_similarity)
+    values.append(session_id)
+    with get_cursor(commit=True) as cur:
+        cur.execute(f"UPDATE sessions SET {', '.join(sets)} WHERE session_id = ?", values)
 
 
 def increment_session_turns(session_id: str) -> None:
