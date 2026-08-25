@@ -224,10 +224,6 @@ above (a desk is not a weapon or sports equipment).
    AC fitting outlet, or a photo frame specifically, the answer is always YES, at any
    size - stop right there, do not run the size check below for these four, they are
    always measurable no matter how small.
-   Worked example - "Can you measure a small photo frame?" is answered "Yes, photo
-   frames are measurable regardless of size - that's a named exception." NOT "no,
-   it's too small" and NOT "no, it counts as a small handheld item." Photo frames are
-   never excluded for their size, ever, under any phrasing of the question.
    For everything else, Geometra can measure a physical surface or object only if ALL
    of the following hold:
    - It is a closed shape with 4 or more sides. NOT a triangle (3 sides), NOT curved,
@@ -483,17 +479,20 @@ _EXCLUDED_CATEGORIES = (
     (
         re.compile(
             r"\b(water\s*bottles?|bottles?|swimming\s*pools?|pools?|ponds?|lakes?|"
-            r"oceans?|rivers?|mugs?|tanks?|aquariums?|fish\s*tanks?)\b",
+            r"oceans?|rivers?|mugs?|tanks?|aquariums?|fish\s*tanks?|"
+            r"sand|granules?|dust|mud|rain|wind|fire)\b",
             re.IGNORECASE,
         ),
-        "it's a liquid or a liquid container",
+        "it's a liquid, liquid container, or natural element",
     ),
     (
         re.compile(
             r"\b(pens?|pencils?|phones?|smartphones?|laptops?|tablets?|ipads?|books?|"
             r"headphones?|earphones?|wires?|scissors|printers?|microwaves?|toys?|"
+            r"rockets?|drones?|helmets?|trophy|trophies|vases?|speakers?|"
             r"utensils?|cosmetics?|currency|coins?|clothes|clothing|luggage|bags?|"
-            r"garbage|globes?|curtains?|paintbrush(es)?|torches?|needles?|remotes?|"
+            r"garbage|dustbins?|(trash|waste)\s*(can|bin|basket)s?|wastebaskets?|"
+            r"globes?|curtains?|paintbrush(es)?|torches?|needles?|remotes?|"
             r"keyboards?|mouse|umbrellas?)\b",
             re.IGNORECASE,
         ),
@@ -743,10 +742,10 @@ def process_turn(query, history, awaiting):
     # matter how the prompt was worded.
     if is_solid_representation_question(query):
         return (
-            "No, Geometra cannot measure that - it's a representation of a living "
-            "thing (a mannequin, statue, doll, or stuffed toy), which isn't "
-            "measurable. Let me know if there's something else in the room I can "
-            "help you measure instead."
+            "Unfortunately, Geometra isn't able to measure that - mannequins, "
+            "statues, dolls, and stuffed toys fall under representations of a "
+            "living thing, which are outside what Geometra supports. I'd be happy "
+            "to help with anything else in the room you'd like measured!"
         ), None
 
     # See find_definite_exclusion_reason() - a fresh question about an item explicitly on
@@ -757,8 +756,9 @@ def process_turn(query, history, awaiting):
         exclusion_reason = find_definite_exclusion_reason(query)
         if exclusion_reason:
             return (
-                f"No, Geometra cannot measure that - {exclusion_reason}. Let me know "
-                "if there's something else in the room I can help you measure instead."
+                f"Unfortunately, Geometra isn't able to measure that since "
+                f"{exclusion_reason}. I'd be happy to help with anything else in "
+                "the room you'd like measured!"
             ), None
 
     # A genuine troubleshooting attempt was already given last turn (see the
