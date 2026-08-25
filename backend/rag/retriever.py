@@ -40,7 +40,17 @@ def retrieve_combined(query_text: str) -> Tuple[List[SourceChunk], str]:
     after testing confirmed the website content is a useful addition to the FAQ base."""
     faq_chunks, _ = retrieve(query_text)
     query_embedding = embed_text(query_text)
-    website_results = website_kb.query(query_embedding, top_k=5)
+    try:
+        website_results = website_kb.query(query_embedding, top_k=5)
+    except Exception as e:
+        # The geometra_website Qdrant collection was originally built with a different
+        # embedding backend's vector size than what's currently configured (e.g. local
+        # 384-dim vs OpenAI's 1536-dim), which raises here as an HTTP 400 from Qdrant. A
+        # website-KB lookup failure must never take down the whole chat response - fall
+        # back to FAQ-only results, same as send_ticket_email/write_escalated_question's
+        # "never raise" convention elsewhere in this codebase.
+        print(f"[website_kb] query failed, continuing with FAQ-only results: {e}")
+        website_results = []
     website_chunks = [
         SourceChunk(
             chunk_id=r["chunk_id"], section=r["section"], text=r["text"],
