@@ -48,3 +48,13 @@ def correct_query(text: str) -> str:
         corrected = re.sub(rf"\b{re.escape(word)}\b", replacement, corrected, count=1)
 
     return corrected
+
+
+def has_no_correction_candidates(word: str) -> bool:
+    """True when pyspellchecker can't find ANY known word close to this one - a much
+    stronger signal of pure gibberish (keyboard-mash like "ejfnlefnse") than merely being
+    "unknown", since a real typo (e.g. "reciept") always has an obvious top candidate."""
+    lower = word.lower()
+    if _spell.known([lower]):
+        return False
+    return not _spell.candidates(lower)
