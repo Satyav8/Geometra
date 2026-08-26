@@ -174,3 +174,7 @@ TICKET_DECLINED_MESSAGE = (
 CLARIFY_DECLINE_PROMPT_MESSAGE = "No worries — what would you like me to clarify or help with instead?"
 
 FILLER_RESPONSE_MESSAGE = "No worries! Let me know whenever you have a question about Geometra."
+
+GIBBERISH_MESSAGE = (
+    "I'm sorry, I didn't quite catch that - could you rephrase your question about Geometra?"
+)

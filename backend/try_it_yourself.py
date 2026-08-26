@@ -11,6 +11,7 @@ sys.path.insert(0, ".")
 from rag.retriever import retrieve
 from rag.relevance import is_gratitude, is_greeting, is_query_relevant
 from rag.embedder import embed_text
+from rag.spelling import has_no_correction_candidates
 from llm.client import call_llm
 from llm.prompts import SYSTEM_PROMPT
 from models import SourceChunk
@@ -393,6 +394,24 @@ def is_filler(text: str) -> bool:
     return stripped in FILLER_PHRASES
 
 
+# Found via manual testing: random keyboard-mash input (e.g. "ejfnlefnse") was reaching
+# Pass 1/2 and coming back as a genuine-sounding "that's a fair question, I don't have
+# that detail, want a ticket?" - offering a ticket for gibberish is confusing and wastes
+# an LLM round-trip. Reuses the spellchecker already loaded for typo correction (see
+# rag/spelling.py) rather than a hand-rolled heuristic (an earlier vowel-ratio attempt
+# both missed this exact example and false-positived on real words like "thanks") -
+# has_no_correction_candidates() is a much stronger signal since a real typo always has
+# an obvious nearby suggestion, but pure nonsense doesn't. Deliberately narrow: only a
+# single all-alphabetic word (no spaces, no digits/punctuation) of some length - short
+# words/acronyms ("hi", "A4", "DXF") are skipped by the length check, and anything with
+# a space is a real sentence, not a single mashed token.
+def is_gibberish(text: str) -> bool:
+    stripped = text.strip()
+    if " " in stripped or not stripped.isalpha() or len(stripped) < 6:
+        return False
+    return has_no_correction_candidates(stripped)
+
+
 # Found via manual testing: messages dressed up as "can Geometra measure X" - a racial
 # slur, graphic violence involving corpses, sexual content about a named real person -
 # were being treated as legitimate-but-unanswerable product questions and offered a
@@ -487,11 +506,17 @@ _EXCLUDED_CATEGORIES = (
     (
         re.compile(
             r"\b(water\s*bottles?|bottles?|swimming\s*pools?|pools?|ponds?|lakes?|"
-            r"oceans?|rivers?|mugs?|tanks?|aquariums?|fish\s*tanks?|"
-            r"sand|granules?|dust|mud|rain|wind|fire)\b",
+            r"oceans?|rivers?|mugs?|tanks?|aquariums?|fish\s*tanks?)\b",
             re.IGNORECASE,
         ),
-        "it's a liquid, liquid container, or natural element",
+        "it's a liquid or liquid container",
+    ),
+    (
+        re.compile(
+            r"\b(sand|granules?|dust|mud|rain|wind|fire)\b",
+            re.IGNORECASE,
+        ),
+        "it's a natural element",
     ),
     (
         re.compile(
@@ -830,6 +855,12 @@ def process_turn(query, history, awaiting):
 
     if is_filler(query):
         return "No worries! Let me know whenever you have a question about Geometra.", None
+
+    if is_gibberish(query):
+        return (
+            "I'm sorry, I didn't quite catch that - could you rephrase your question "
+            "about Geometra?"
+        ), None
 
     # Pass 1 — Understand. Always gets recent history (not just when awaiting ==
     # "clarification" as the original diagram showed) - stress-testing found that a
