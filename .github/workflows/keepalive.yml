@@ -1,12 +1,19 @@
-name: Keep backend and Supabase warm
+name: Keep Supabase active
 
-# Render's free tier spins the backend down after ~15 minutes idle, and Supabase's free
-# tier pauses a project after 7 days with zero activity. A successful hit on /health
+# Supabase's free tier pauses a project after 7 days with zero activity. A hit on /health
 # checks the database (see backend/main.py's health() handler), so it counts as Supabase
-# activity too - one ping solves both, and needs no secrets since /health is public.
+# activity - no secrets needed since /health is public.
+#
+# Deliberately just twice a day, not more frequent: Render's free tier gives only 750
+# instance-hours/month shared across every free service in the workspace (~730 hours in
+# a month), and each ping keeps the backend awake for its ~15-minute idle window before
+# it sleeps again. Pinging every 10 minutes would keep it awake continuously and burn
+# almost the entire monthly budget on keep-alive alone, risking suspension before the
+# month is out. Twice a day costs Render about 15 hours/month - trivial - while still
+# giving Supabase's 7-day inactivity clock a huge safety margin.
 on:
   schedule:
-    - cron: "*/10 * * * *"
+    - cron: "0 */12 * * *"
   workflow_dispatch: {}
 
 jobs:
