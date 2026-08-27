@@ -1,0 +1,23 @@
+name: Keep backend and Supabase warm
+
+# Render's free tier spins the backend down after ~15 minutes idle, and Supabase's free
+# tier pauses a project after 7 days with zero activity. A successful hit on /health
+# checks the database (see backend/main.py's health() handler), so it counts as Supabase
+# activity too - one ping solves both, and needs no secrets since /health is public.
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch: {}
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Hit /health
+        run: |
+          status=$(curl -s -o /tmp/health.json -w "%{http_code}" https://geometra.onrender.com/health)
+          cat /tmp/health.json
+          echo "HTTP status: $status"
+          if [ "$status" != "200" ]; then
+            echo "::warning::/health returned $status instead of 200"
+          fi
