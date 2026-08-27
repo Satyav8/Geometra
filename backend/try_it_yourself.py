@@ -884,9 +884,15 @@ def process_turn(query, history, awaiting):
     # clarification (e.g. it was a troubleshooting answer, not a question) - see
     # signals_already_tried().
     already_clarified = awaiting == "clarification" or signals_already_tried(query)
-    response = answer_pass(query, intent, chunks, confidence, already_clarified=already_clarified)
+    # Pass 2's prompt ends with "CUSTOMER QUESTION: {this}" - passing the raw turn text
+    # here (e.g. a follow-up like "and a commode too?") sat a grammatically incomplete
+    # fragment right next to Pass 1's already-correct intent summary, and sometimes pulled
+    # Pass 2 toward hedging or a wrong answer instead of trusting the intent. Passing the
+    # reformulated, self-contained query instead fixes that; for a fresh, already-clear
+    # question Pass 1 just restates it cleanly anyway, so this is a no-op there.
+    response = answer_pass(reformulated_query, intent, chunks, confidence, already_clarified=already_clarified)
     if has_hedge(response):
-        response = answer_pass(query, intent, chunks, confidence, hedge_retry=True, already_clarified=already_clarified)
+        response = answer_pass(reformulated_query, intent, chunks, confidence, hedge_retry=True, already_clarified=already_clarified)
         # accepted as-is even if the retry still hedges (one retry only, per spec)
 
     stripped = response.strip()
@@ -904,7 +910,7 @@ def process_turn(query, history, awaiting):
         # 2 of a ticket-related thread should still be a genuine solve attempt, not an
         # immediate ticket offer) - only fall back to the ticket offer if it insists on
         # asking a THIRD way even after being told directly not to.
-        response = answer_pass(query, intent, chunks, confidence, already_clarified=True, cap_retry=True)
+        response = answer_pass(reformulated_query, intent, chunks, confidence, already_clarified=True, cap_retry=True)
         stripped = response.strip()
         is_clarify_shaped = stripped.startswith("[CLARIFY]") or looks_like_clarify_question(stripped)
         if is_clarify_shaped:
