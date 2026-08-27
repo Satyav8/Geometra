@@ -545,12 +545,18 @@ def process_turn(
     # Pass 2 — Answer / Refine. Also forces the cap when the customer signals they already
     # tried the suggested fix, even if the prior turn wasn't tracked as a clarification.
     already_clarified = awaiting == "clarification" or signals_already_tried(query)
-    response, a_in_tok, a_out_tok = answer_pass(query, intent, chunks, confidence, already_clarified=already_clarified)
+    # Pass 2's prompt ends with "CUSTOMER QUESTION: {this}" - passing the raw turn text
+    # here (e.g. a follow-up like "and a commode too?") sat a grammatically incomplete
+    # fragment right next to Pass 1's already-correct intent summary, and sometimes pulled
+    # Pass 2 toward hedging or a wrong answer instead of trusting the intent. Passing the
+    # reformulated, self-contained query instead fixes that; for a fresh, already-clear
+    # question Pass 1 just restates it cleanly anyway, so this is a no-op there.
+    response, a_in_tok, a_out_tok = answer_pass(reformulated_query, intent, chunks, confidence, already_clarified=already_clarified)
     total_in = u_in_tok + a_in_tok
     total_out = u_out_tok + a_out_tok
     if has_hedge(response):
         response, r_in_tok, r_out_tok = answer_pass(
-            query, intent, chunks, confidence, hedge_retry=True, already_clarified=already_clarified
+            reformulated_query, intent, chunks, confidence, hedge_retry=True, already_clarified=already_clarified
         )
         total_in += r_in_tok
         total_out += r_out_tok
@@ -591,7 +597,7 @@ def process_turn(
         # blunter instruction to just answer - only fall back to the ticket offer if it
         # insists on asking a THIRD way even after being told directly not to.
         response, c_in_tok, c_out_tok = answer_pass(
-            query, intent, chunks, confidence, already_clarified=True, cap_retry=True
+            reformulated_query, intent, chunks, confidence, already_clarified=True, cap_retry=True
         )
         total_in += c_in_tok
         total_out += c_out_tok
