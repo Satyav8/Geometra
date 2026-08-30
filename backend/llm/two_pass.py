@@ -321,6 +321,10 @@ def clean_leaked_artifacts(text: str) -> str:
         text = re.sub(r"\bRule\s+\d+[A-Z]?\s*\(\s*\)", "", text)
         text = re.sub(r"\bRule\s+\d+[A-Z]?\b", "", text)
         text = re.sub(r"\s{2,}", " ", text).strip()
+    # Markdown bold reads as literal asterisks in the frontend, which looks like raw
+    # third-party output rather than a normal reply - strip the markers, keep the text.
+    if "**" in text:
+        text = re.sub(r"\*\*(.+?)\*\*", r"\1", text)
     return text
 
 
