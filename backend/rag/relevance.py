@@ -50,17 +50,19 @@ def is_gratitude(query: str) -> bool:
     return any(_contains_word(query_lower, phrase) for phrase in GRATITUDE_PHRASES)
 
 
-GREETING_PHRASES = {
-    "hi", "hii", "hiii", "hello", "hellooo", "hey", "heyy",
-    "hi there", "hello there", "hey there",
-    "good morning", "good afternoon", "good evening",
-}
+# A fixed set of exact strings ("hi", "hey", "heyy"...) kept missing casual
+# spelling variants one letter at a time ("heyaaa", "hiiii", "helloooo") - matched
+# by pattern instead so any amount of letter-stretching on a known greeting root
+# is covered, not just the handful of spellings someone thought to list.
+_GREETING_RE = re.compile(
+    r"^(?:h+i+|h+e+y+a*|h+e+l+o+|good\s+(?:morning|afternoon|evening))(?:\s+there)?$"
+)
 
 
 def is_greeting(query: str) -> bool:
-    """Exact match only (unlike is_gratitude's "contains anywhere") - a greeting is much
-    more likely than "thanks" to open a message that also has a real question in it
-    (e.g. "Hi, how much does it cost?"), so only short-circuit when the WHOLE message
+    """Whole-message match only (unlike is_gratitude's "contains anywhere") - a greeting
+    is much more likely than "thanks" to open a message that also has a real question in
+    it (e.g. "Hi, how much does it cost?"), so only short-circuit when the WHOLE message
     is just a greeting, otherwise the real question would never get answered."""
     normalized = query.lower().strip().strip("!.,")
-    return normalized in GREETING_PHRASES
+    return bool(_GREETING_RE.match(normalized))
