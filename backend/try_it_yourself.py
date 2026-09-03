@@ -713,8 +713,11 @@ def retrieve_combined(query_text):
     collection (see website_kb.py) and merges results in, re-sorted by similarity and
     re-scored for confidence. Kept as a wrapper here rather than editing rag/retriever.py
     directly, so the production retrieve() path used by routers/chat.py is untouched."""
-    faq_chunks, _ = retrieve(query_text)
+    # Computed once and reused for both lookups below - both queries embed the exact same
+    # text, so calling embed_text() a second time here just doubled the embedding API
+    # round-trip (~0.5-1.3s) for an identical vector.
     query_embedding = embed_text(query_text)
+    faq_chunks, _ = retrieve(query_text, query_embedding)
     try:
         website_results = website_kb.query(query_embedding, top_k=5)
     except Exception as e:

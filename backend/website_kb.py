@@ -57,8 +57,11 @@ def upsert_chunks(chunk_ids, embeddings, documents, metadatas) -> None:
 
 
 def query(query_embedding, top_k: int):
-    if not _collection_exists():
-        return []
+    # No _collection_exists() pre-check here (unlike upsert_chunks) - that cost a second
+    # Qdrant round-trip on every single lookup for a case (missing collection) that's both
+    # rare and already handled: retrieve_combined() wraps this call in a try/except that
+    # falls back to FAQ-only results on any failure, a 404 from a missing collection
+    # included, so the check was pure overhead on the hot path with no behavior gained.
     resp = requests.post(
         _url("/points/search"),
         headers=HEADERS,
