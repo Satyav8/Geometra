@@ -56,6 +56,9 @@ def _call_openai(system_prompt: str, user_message: str) -> Tuple[str, int, int]:
     )
     text = completion.choices[0].message.content
     usage = completion.usage
+    cached = getattr(getattr(usage, "prompt_tokens_details", None), "cached_tokens", 0) or 0
+    if cached:
+        print(f"[cache] {cached}/{usage.prompt_tokens} prompt tokens served from cache")
     return text, usage.prompt_tokens, usage.completion_tokens
 
 
