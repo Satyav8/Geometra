@@ -54,12 +54,14 @@ def test_response_length_leaves_short_response_alone():
 
 
 def test_numerical_hallucination_flags_unfounded_number():
+    # triggered=True is an internal-only signal (see numerical_accuracy in
+    # evaluation/metrics.py) - the response text itself must stay exactly as the model
+    # produced it, never patched with debug/warning text that a customer would see.
     chunks = [make_chunk("Accuracy is 99%+ with 10mm variance.")]
-    response, triggered = check_numerical_hallucination(
-        "The device weighs 500 grams. [Source: Pricing]", chunks
-    )
+    original = "The device weighs 500 grams. [Source: Pricing]"
+    response, triggered = check_numerical_hallucination(original, chunks)
     assert triggered is True
-    assert "Warning" in response
+    assert response == original
 
 
 def test_numerical_hallucination_allows_grounded_number():
