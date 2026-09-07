@@ -64,8 +64,8 @@ export default function ChatWindow() {
   return (
     <div className="chat-window">
       <div className="chat-header">
-        <div className="chat-header-title">S.A.M</div>
-        <div className="chat-header-subtitle">Simple Answering Machine · Geometra Support</div>
+        <div className="chat-header-title">SAM</div>
+        <div className="chat-header-subtitle">Geometra support</div>
       </div>
       <div className="message-list">
         {messages.map((m, i) => (

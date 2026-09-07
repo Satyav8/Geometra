@@ -175,7 +175,7 @@ _EXCLUDED_CATEGORIES = (
     (
         re.compile(
             r"\b(cars?|buses|trains?|bikes?|bicycles?|cycles?|motorcycles?|scooters?|"
-            r"trucks?|vehicles?)\b",
+            r"trucks?|vehicles?|submarines?|warships?|battleships?|fighter\s*jets?)\b",
             re.IGNORECASE,
         ),
         "it's a vehicle",
@@ -238,8 +238,24 @@ _EXCLUDED_CATEGORIES = (
 )
 
 
+#  "does Geometra work underwater for submarines" asks the same thing as "can I measure a
+# submarine" but has no "measure"/"measuring" word, so it skipped the gate below entirely
+# and reached Pass 2 - which unreliably sometimes hard-refused it as a SAFETY case and
+# sometimes asked an unnecessary clarifying question, even though a submarine is just an
+# ordinary vehicle exclusion (Rule 8C) that needs no LLM judgment at all. Scoped to this
+# one word, not a broader "work" gate on every category, since a broader gate risks a
+# false match on something unrelated like "my printer doesn't work".
+_SUBMARINE_OPERATIONAL_RE = re.compile(
+    r"submarines?.{0,40}\b(work|works|working|measure|measuring|scan|scanning)\b|"
+    r"\b(work|works|working|measure|measuring|scan|scanning)\b.{0,40}submarines?",
+    re.IGNORECASE | re.DOTALL,
+)
+
+
 def find_definite_exclusion_reason(text: str) -> Optional[str]:
     lowered = text.lower()
+    if _SUBMARINE_OPERATIONAL_RE.search(lowered):
+        return "it's a vehicle"
     if "measure" not in lowered and "measuring" not in lowered:
         return None
     for pattern, reason in _EXCLUDED_CATEGORIES:
@@ -459,20 +475,29 @@ def process_turn(
     thread."""
 
     # Hard safety boundary - checked before absolutely anything else, including
-    # greeting/gratitude. See is_severe_slur() for why this exists as a separate,
-    # code-level layer rather than relying on the prompt rule alone.
-    if is_severe_slur(query):
+    # greeting/gratitude. Checked against raw_query, NOT the typo-corrected query - the
+    # spellchecker "corrected" a slur (e.g. "nigga") into an unrelated dictionary word
+    # ("night") since the slur itself isn't a known word, which let it slip straight past
+    # this check when it ran against the corrected text instead of what the customer
+    # actually typed. See is_severe_slur() for why this exists as a separate, code-level
+    # layer rather than relying on the prompt rule alone.
+    if is_severe_slur(raw_query):
         return _short_circuit(SAFETY_REFUSAL_MESSAGE)
 
-    # Same idea for common prompt-injection phrasings - see is_injection_attempt(). A
-    # clean scope refusal, not a ticket offer or a clarifying question.
-    if is_injection_attempt(query):
+    # Same idea for common prompt-injection phrasings - see is_injection_attempt(). Also
+    # checked against raw_query for the same reason as above. A clean scope refusal, not a
+    # ticket offer or a clarifying question.
+    if is_injection_attempt(raw_query):
         return _short_circuit(OUT_OF_SCOPE_MESSAGE)
 
     # See is_solid_representation_question() - answered deterministically, not left to
     # Pass 2, since this specific question kept regressing no matter how the prompt was
-    # worded.
-    if is_solid_representation_question(query):
+    # worded. Checked against raw_query, not the typo-corrected query - see the
+    # is_severe_slur/is_injection_attempt comment above for why: spell-correction can turn
+    # an unusual short phrase into an unrelated real word, which would silently defeat
+    # every check below the same way it did for the slur and greeting cases. All the
+    # deterministic pattern checks in this function follow that same reasoning.
+    if is_solid_representation_question(raw_query):
         return _short_circuit(MANNEQUIN_EXCLUSION_MESSAGE)
 
     # See find_definite_exclusion_reason() - a fresh question about an item explicitly on
@@ -480,7 +505,7 @@ def process_turn(
     # even when the item was already named in the prompt. Answered deterministically
     # instead of adding more prompt text.
     if awaiting is None:
-        exclusion_reason = find_definite_exclusion_reason(query)
+        exclusion_reason = find_definite_exclusion_reason(raw_query)
         if exclusion_reason:
             return _short_circuit(EXCLUDED_ITEM_MESSAGE_TEMPLATE.format(reason=exclusion_reason))
 
@@ -489,27 +514,27 @@ def process_turn(
     # escalate now. This decides deterministically: an explicit ticket mention, a signal
     # the fix didn't work, or a bare "no" all mean "escalate," anything else means the
     # customer is moving on and this turn is treated like a fresh question.
-    if awaiting == "troubleshoot_given" and wants_escalation_now(query):
+    if awaiting == "troubleshoot_given" and wants_escalation_now(raw_query):
         return _short_circuit(TICKET_ESCALATION_MESSAGE, new_awaiting="ticket_confirmation")
 
     # Same idea, one turn earlier: right after the one allowed clarifying round, if the
     # customer signals whatever they already tried failed, escalate now rather than
     # letting Pass 2 give a "solve attempt" that just re-suggests the same thing that
     # already didn't work.
-    if awaiting == "clarification" and signals_already_tried(query):
+    if awaiting == "clarification" and signals_already_tried(raw_query):
         return _short_circuit(TICKET_ESCALATION_MESSAGE, new_awaiting="ticket_confirmation")
 
     # Checked before is_gratitude - is_gratitude() matches on "contains the word thanks
     # anywhere", so "no thanks" (a decline) would otherwise be misread as gratitude. An
     # unambiguous bare-negation phrase (exact match) takes priority.
-    if awaiting == "ticket_confirmation" and is_bare_negation(query):
+    if awaiting == "ticket_confirmation" and is_bare_negation(raw_query):
         return _short_circuit(TICKET_DECLINED_MESSAGE, clear_pending=True)
-    if awaiting != "ticket_confirmation" and is_bare_negation(query):
+    if awaiting != "ticket_confirmation" and is_bare_negation(raw_query):
         return _short_circuit(CLARIFY_DECLINE_PROMPT_MESSAGE)
 
-    if is_gratitude(query):
+    if is_gratitude(raw_query):
         return _short_circuit(GRATITUDE_MESSAGE)
-    if is_greeting(query):
+    if is_greeting(raw_query):
         return _short_circuit(GREETING_MESSAGE)
 
     # Only a live "yes" to a ticket offer the bot JUST made raises one immediately. Every
@@ -517,14 +542,17 @@ def process_turn(
     # the bot tries to understand and solve the actual problem first - a ticket only
     # happens via [CANNOT_ANSWER] if it genuinely can't help, same as any other
     # unanswerable question.
-    if awaiting == "ticket_confirmation" and is_affirmative(query):
+    if awaiting == "ticket_confirmation" and is_affirmative(raw_query):
         return _short_circuit("", raise_ticket_now=True, clear_pending=True)
     # anything else: clear awaiting, fall through and treat this message as a new question
 
-    if is_filler(query):
+    if is_filler(raw_query):
         return _short_circuit(FILLER_RESPONSE_MESSAGE)
 
-    if is_gibberish(query):
+    # is_gibberish asks "did spell-correction find nothing for this text" - checking the
+    # already-corrected query would be near-tautological (if a correction existed, query
+    # already reflects it), so this needs the raw text same as the other checks above.
+    if is_gibberish(raw_query):
         return _short_circuit(GIBBERISH_MESSAGE)
 
     # Pass 1 — Understand. Always gets recent history - a short follow-up referencing the
