@@ -520,9 +520,27 @@ _EXCLUDED_CATEGORIES = (
         "it's a vehicle",
     ),
     (
+        # Only covered "human(s)"/"person(s)"/"people", not the far more common everyday
+        # words for a person - "man," "woman," "guy," "kid," etc. all fell through this
+        # gate entirely. That gap surfaced as a serious, consistent (not stochastic)
+        # racial disparity in testing: "can I measure a black/asian/indian guy" hit a hard
+        # SAFETY refusal every time, while "can I measure a white guy" got sanitized by
+        # Pass 1 into an unrelated "white wall" question and answered "yes." Neither is
+        # correct - a person is just "it's a living thing," the same neutral answer
+        # "can I measure a person" already gets, regardless of any descriptor attached to
+        # them. Broadened so any everyday word for a person is caught here, deterministically
+        # and identically, before the LLM ever sees (and inconsistently judges) the query.
+        # The negative lookahead guards a real collision: these same words are extremely
+        # common in room names - "kids' room," "baby's room," "man cave," "ladies room" are
+        # all legitimate spaces to measure, not people. Without it, "can I measure my kids
+        # room" would wrongly get excluded as "a living thing."
         re.compile(
             r"\b(trees?|plants?|dogs?|cats?|humans?|persons?|people|animals?|insects?|"
-            r"birds?|flowers?)\b",
+            r"birds?|flowers?|men|man|women|woman|guys?|boys?|girls?|kids?|child|"
+            r"children|baby|babies|lady|ladies|gentlemen|gentleman|adults?|"
+            r"teenagers?|toddlers?)\b"
+            r"(?!['’]?s?[\s-]+(room|rooms|cave|bedroom|bedrooms|den|office|nursery|"
+            r"playroom|bathroom|closet|corner|area|space|suite|zone|wardrobe|cabin))",
             re.IGNORECASE,
         ),
         "it's a living thing",
