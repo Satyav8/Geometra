@@ -490,7 +490,7 @@ _EXCLUDED_CATEGORIES = (
     (
         re.compile(
             r"\b(cars?|buses|trains?|bikes?|bicycles?|cycles?|motorcycles?|scooters?|"
-            r"trucks?|vehicles?)\b",
+            r"trucks?|vehicles?|submarines?|warships?|battleships?|fighter\s*jets?)\b",
             re.IGNORECASE,
         ),
         "it's a vehicle",
@@ -553,8 +553,24 @@ _EXCLUDED_CATEGORIES = (
 )
 
 
+#  "does Geometra work underwater for submarines" asks the same thing as "can I measure a
+# submarine" but has no "measure"/"measuring" word, so it skipped the gate below entirely
+# and reached Pass 2 - which unreliably sometimes hard-refused it as a SAFETY case and
+# sometimes asked an unnecessary clarifying question, even though a submarine is just an
+# ordinary vehicle exclusion (Rule 8C) that needs no LLM judgment at all. Scoped to this
+# one word, not a broader "work" gate on every category, since a broader gate risks a
+# false match on something unrelated like "my printer doesn't work".
+_SUBMARINE_OPERATIONAL_RE = re.compile(
+    r"submarines?.{0,40}\b(work|works|working|measure|measuring|scan|scanning)\b|"
+    r"\b(work|works|working|measure|measuring|scan|scanning)\b.{0,40}submarines?",
+    re.IGNORECASE | re.DOTALL,
+)
+
+
 def find_definite_exclusion_reason(text: str) -> str | None:
     lowered = text.lower()
+    if _SUBMARINE_OPERATIONAL_RE.search(lowered):
+        return "it's a vehicle"
     if "measure" not in lowered and "measuring" not in lowered:
         return None
     for pattern, reason in _EXCLUDED_CATEGORIES:

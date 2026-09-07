@@ -1,5 +1,4 @@
 import EmailSupportButton from "./EmailSupportButton.jsx";
-import SourceCitation from "./SourceCitation.jsx";
 
 export default function MessageBubble({ message }) {
   const isUser = message.role === "user";
@@ -22,7 +21,6 @@ export default function MessageBubble({ message }) {
           </div>
         )}
         <EmailSupportButton email={message.support_email} />
-        <SourceCitation sources={message.sources} />
       </div>
     </div>
   );
