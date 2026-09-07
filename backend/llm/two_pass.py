@@ -22,6 +22,7 @@ from config import (
     GREETING_MESSAGE,
     MANNEQUIN_EXCLUSION_MESSAGE,
     OUT_OF_SCOPE_MESSAGE,
+    QUICK_COMMERCE_PRINT_MESSAGE,
     SAFETY_REFUSAL_MESSAGE,
     TICKET_DECLINED_MESSAGE,
     TICKET_ESCALATION_MESSAGE,
@@ -310,6 +311,20 @@ def find_definite_exclusion_reason(text: str) -> Optional[str]:
     return None
 
 
+# A customer asking about printing the marker via Zepto/Blinkit/Instamart kept getting an
+# unnecessary clarifying question instead of the FAQ's direct, unambiguous answer - even
+# after fixing the spell-correction bug that mangled these platform names into unrelated
+# words (see DOMAIN_WORDS in rag/spelling.py), Pass 2 still wouldn't reliably surface the
+# "avoid quick-commerce platforms" guidance from context. Same reliability ceiling seen
+# everywhere else in this file: answered deterministically instead of trusting the model to
+# apply Rule 1B correctly for this specific, well-defined case.
+_QUICK_COMMERCE_PATTERN = re.compile(r"\b(zepto|blinkit|instamart)\b", re.IGNORECASE)
+
+
+def is_quick_commerce_print_question(text: str) -> bool:
+    return bool(_QUICK_COMMERCE_PATTERN.search(text))
+
+
 # Prompt wording alone couldn't get Pass 2 to reliably use the literal [CLARIFY] tag in
 # every framing that should trigger it - and an untagged clarification is invisible to the
 # already_clarified cap, so the same question could repeat instead of being capped at one
@@ -554,6 +569,13 @@ def process_turn(
         exclusion_reason = find_definite_exclusion_reason(raw_query)
         if exclusion_reason:
             return _short_circuit(EXCLUDED_ITEM_MESSAGE_TEMPLATE.format(reason=exclusion_reason))
+
+    # See is_quick_commerce_print_question() - a customer asking about printing the marker
+    # via Zepto/Blinkit/Instamart kept getting an unnecessary clarifying question instead
+    # of the FAQ's direct answer, even with the correct chunk sitting right there in
+    # context. Answered deterministically instead of trusting Pass 2 to reliably apply it.
+    if is_quick_commerce_print_question(raw_query):
+        return _short_circuit(QUICK_COMMERCE_PRINT_MESSAGE)
 
     # A genuine troubleshooting attempt was already given last turn - checked here, in
     # code, rather than leaving Pass 2 to judge on its own whether the customer wants to

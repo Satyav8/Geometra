@@ -4,10 +4,17 @@ from spellchecker import SpellChecker
 
 # Product/technical terms that must never be "corrected" into an unrelated real word
 # (verified against pyspellchecker's actual suggestions: geometra->geometry, dxf->of,
-# a4/a5/a3->a, upi->up, aruco->truck, whatsapp->None).
+# a4/a5/a3->a, upi->up, aruco->truck, whatsapp->None, zepto->kept, blinkit->blanket).
+# The zepto/blinkit case was a real production bug, not a theoretical one: a customer
+# asking "can I get a marker print from zepto" got "zepto" silently corrected to "kept"
+# before the LLM ever saw the query, which then answered a fabricated question about a
+# nonexistent "Kept" product/feature instead of surfacing the FAQ's actual, correct
+# guidance (avoid quick-commerce platforms for printing) - a hallucination caused entirely
+# by this correction step, not the LLM's own judgment.
 DOMAIN_WORDS = {
     "geometra", "aruco", "whatsapp", "dxf", "chromadb", "qdrant",
     "sendgrid", "supabase", "groq", "sam",
+    "zepto", "blinkit", "instamart",
 }
 
 # Below this length, corrections are more likely to mangle a legitimate short word/
