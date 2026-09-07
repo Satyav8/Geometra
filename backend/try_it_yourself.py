@@ -621,6 +621,25 @@ def find_definite_exclusion_reason(text: str) -> str | None:
     return None
 
 
+# A customer asking about printing the marker via Zepto/Blinkit/Instamart kept getting an
+# unnecessary clarifying question instead of the FAQ's direct, unambiguous answer, even
+# with the correct chunk sitting right there in context - Pass 2 wouldn't reliably surface
+# the "avoid quick-commerce platforms" guidance. Same reliability ceiling seen everywhere
+# else in this file: answered deterministically instead of trusting the model here.
+_QUICK_COMMERCE_PATTERN = re.compile(r"\b(zepto|blinkit|instamart)\b", re.IGNORECASE)
+
+QUICK_COMMERCE_PRINT_MESSAGE = (
+    "You can get the marker printed at any external shop or service, just make sure the "
+    "print settings match the instructions and that a laser printer is used. One thing to "
+    "avoid: printing it through quick-commerce/online platforms like Blinkit, Instamart, "
+    "or Zepto - that should be strictly avoided."
+)
+
+
+def is_quick_commerce_print_question(text: str) -> bool:
+    return bool(_QUICK_COMMERCE_PATTERN.search(text))
+
+
 # Prompt wording alone couldn't get Pass 2 to reliably use the literal [CLARIFY] tag in
 # every framing that should trigger it (e.g. "raise a ticket because <problem>" sometimes
 # produced a clarifying-question-shaped reply as plain prose, no tag) - and an untagged
@@ -861,6 +880,11 @@ def process_turn(query, history, awaiting):
                 f"{exclusion_reason}. I'd be happy to help with anything else in "
                 "the room you'd like measured!"
             ), None
+
+    # See is_quick_commerce_print_question() - answered deterministically instead of
+    # trusting Pass 2 to reliably surface the FAQ's direct answer from context.
+    if is_quick_commerce_print_question(query):
+        return QUICK_COMMERCE_PRINT_MESSAGE, None
 
     # A genuine troubleshooting attempt was already given last turn (see the
     # already_clarified handling below) - checked here, in code, rather than leaving Pass

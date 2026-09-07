@@ -150,6 +150,13 @@ EXCLUDED_ITEM_MESSAGE_TEMPLATE = (
     "help with anything else in the room you'd like measured!"
 )
 
+QUICK_COMMERCE_PRINT_MESSAGE = (
+    "You can get the marker printed at any external shop or service, just make sure the "
+    "print settings match the instructions and that a laser printer is used. One thing to "
+    "avoid: printing it through quick-commerce/online platforms like Blinkit, Instamart, "
+    "or Zepto - that should be strictly avoided."
+)
+
 TICKET_OFFER_MESSAGE = (
     "That's a fair question, and I'd rather not guess and risk giving you the "
     "wrong answer. I don't have that specific detail available to me right now, "
