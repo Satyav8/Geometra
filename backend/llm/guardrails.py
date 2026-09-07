@@ -44,7 +44,13 @@ def _normalize_whitespace(text: str) -> str:
 def check_numerical_hallucination(
     response: str, chunks: List[SourceChunk]
 ) -> Tuple[str, bool]:
-    """Returns (response, triggered)."""
+    """Returns (response, triggered). The `triggered` flag is an internal quality signal
+    only - the response text itself is never modified here. This used to append a literal
+    "[Warning: response contains unverified numbers]" onto the response, which meant that
+    internal debug text was going straight to the customer on live production traffic. The
+    same signal is already tracked properly and independently by the numerical_accuracy
+    evaluation metric (logged internally, never customer-facing), so nothing is lost by
+    not also stuffing it into the answer text itself."""
     if response == FALLBACK_MESSAGE:
         return response, False
 
@@ -60,7 +66,6 @@ def check_numerical_hallucination(
     ]
 
     if unfounded:
-        response = response + "\n\n[Warning: response contains unverified numbers]"
         return response, True
 
     return response, False
