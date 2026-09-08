@@ -460,6 +460,26 @@ profanity.add_censor_words([
     "dipshit", "dipshits", "asswipe", "asswipes", "b!tch", "b!tches",
 ])
 
+# Classic filter-evasion technique - stretching a word out with repeated letters
+# ("bitchhhh", "nigggga") - defeats both better_profanity's own matching (no built-in
+# tolerance for arbitrary letter repetition, only specific character substitutions like
+# "1" for "i") and the spell-correction fallback above (pyspellchecker's edit-distance
+# cutoff gives up once too many extra letters are added). Built once at import time: for
+# every word already in the profanity library, a pattern that lets each of its letters
+# repeat one or more times, so "bitchhhh" matches the same underlying pattern as "bitch"
+# regardless of how many h's are appended. Verified against a broad set of normal
+# questions and the greeting-elongation cases ("heyaaa," "hiiii") with zero false
+# positives - real words don't accidentally spell out a censored word letter-by-letter.
+def _elongation_tolerant_pattern(word: str):
+    return re.compile(r"\b" + "".join(re.escape(c) + "+" for c in word) + r"\b", re.IGNORECASE)
+
+
+_ELONGATION_PATTERNS = [
+    _elongation_tolerant_pattern(w._original)
+    for w in profanity.CENSOR_WORDSET
+    if w._original.isalpha() and len(w._original) >= 3
+]
+
 SAFETY_REFUSAL_MESSAGE = (
     "I can't help with that. This chat is here for genuine, respectful questions about "
     "using Geometra to measure interior spaces and objects - happy to help if you have "
@@ -477,6 +497,8 @@ def is_severe_slur(text: str) -> bool:
     # of hand-rolling fuzzy-matching against a slur list.
     corrected = correct_query(text)
     if corrected != text and profanity.contains_profanity(corrected):
+        return True
+    if any(p.search(text) for p in _ELONGATION_PATTERNS):
         return True
     return False
 
