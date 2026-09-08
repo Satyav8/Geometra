@@ -157,6 +157,12 @@ QUICK_COMMERCE_PRINT_MESSAGE = (
     "or Zepto - that should be strictly avoided."
 )
 
+WET_SURFACE_MESSAGE = (
+    "Geometra shouldn't be used on a wet or damp surface - the marker's tape won't stick "
+    "properly, which can throw off the measurement. Make sure the wall or surface is "
+    "completely dry before pasting the marker."
+)
+
 TICKET_OFFER_MESSAGE = (
     "That's a fair question, and I'd rather not guess and risk giving you the "
     "wrong answer. I don't have that specific detail available to me right now, "
