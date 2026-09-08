@@ -640,6 +640,27 @@ def is_quick_commerce_print_question(text: str) -> bool:
     return bool(_QUICK_COMMERCE_PATTERN.search(text))
 
 
+# A benign, on-topic question ("can you teach me how to paste the marker on a wet
+# surface") was hitting the hard SAFETY refusal - not deterministically, but often enough
+# to matter: 3 of 12 identical attempts against production got refused, the rest answered
+# correctly. Nothing in the message is remotely unsafe; this is Pass 2's own SAFETY
+# judgment misfiring on "wet"/"drenched" phrasing, the same kind of stochastic LLM
+# unreliability behind the earlier submarine false-positive. The FAQ already has one
+# clear, correct answer for this topic regardless of exact phrasing, so it's answered
+# deterministically instead of leaving it to a ~25%-of-the-time coin flip.
+_WET_SURFACE_PATTERN = re.compile(r"\b(wet|damp|moist|drenched|soaked)\b", re.IGNORECASE)
+
+WET_SURFACE_MESSAGE = (
+    "Geometra shouldn't be used on a wet or damp surface - the marker's tape won't stick "
+    "properly, which can throw off the measurement. Make sure the wall or surface is "
+    "completely dry before pasting the marker."
+)
+
+
+def is_wet_surface_question(text: str) -> bool:
+    return bool(_WET_SURFACE_PATTERN.search(text))
+
+
 # Prompt wording alone couldn't get Pass 2 to reliably use the literal [CLARIFY] tag in
 # every framing that should trigger it (e.g. "raise a ticket because <problem>" sometimes
 # produced a clarifying-question-shaped reply as plain prose, no tag) - and an untagged
@@ -885,6 +906,11 @@ def process_turn(query, history, awaiting):
     # trusting Pass 2 to reliably surface the FAQ's direct answer from context.
     if is_quick_commerce_print_question(query):
         return QUICK_COMMERCE_PRINT_MESSAGE, None
+
+    # See is_wet_surface_question() - answered deterministically since Pass 2's own
+    # SAFETY judgment was misfiring on this benign topic roughly a quarter of the time.
+    if is_wet_surface_question(query):
+        return WET_SURFACE_MESSAGE, None
 
     # A genuine troubleshooting attempt was already given last turn (see the
     # already_clarified handling below) - checked here, in code, rather than leaving Pass
