@@ -163,6 +163,20 @@ WET_SURFACE_MESSAGE = (
     "completely dry before pasting the marker."
 )
 
+CURVED_SURFACE_MESSAGE = (
+    "Unfortunately, Geometra isn't able to measure that since it's a curved surface - it's "
+    "designed specifically for flat, closed, non-curved shapes, regardless of how many "
+    "corners are visible. I'd be happy to help with anything else in the room you'd like "
+    "measured!"
+)
+
+ANGULAR_ARCH_MESSAGE = (
+    "Yes, an angular arch is measurable with Geometra - arches count as long as they're "
+    "angular/quadrilateral in shape (a rounded or curved arch is the only kind that's "
+    "excluded). Just make sure it's a closed shape with at least 3 corners visible in the "
+    "photo."
+)
+
 TICKET_OFFER_MESSAGE = (
     "That's a fair question, and I'd rather not guess and risk giving you the "
     "wrong answer. I don't have that specific detail available to me right now, "

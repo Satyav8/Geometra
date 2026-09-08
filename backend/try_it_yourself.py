@@ -450,6 +450,16 @@ _PROFANITY_WHITELIST = (
 )
 profanity.load_censor_words(whitelist_words=list(_PROFANITY_WHITELIST))
 
+# The default wordlist still missed real slurs/profanity found via broader adversarial
+# testing (an ableist slur, a transphobic slur, a religious/racial slur, and a couple of
+# general insults) - some of these are ALSO exactly the words correct_query() mangles into
+# an unrelated real word ("tranny"->"granny", "asswipe"->"swipe"), so leaving them
+# uncovered here would reopen the same class of bug fixed for the racial slur earlier.
+profanity.add_censor_words([
+    "cripple", "crippled", "tranny", "trannies", "towelhead", "towelheads",
+    "dipshit", "dipshits", "asswipe", "asswipes", "b!tch", "b!tches",
+])
+
 SAFETY_REFUSAL_MESSAGE = (
     "I can't help with that. This chat is here for genuine, respectful questions about "
     "using Geometra to measure interior spaces and objects - happy to help if you have "
@@ -483,9 +493,10 @@ def is_severe_slur(text: str) -> bool:
 # deterministically, the same way is_severe_slur() is a backstop, not a full classifier.
 _INJECTION_PATTERN = re.compile(
     r"(system\s*prompt|reveal\s+your\s+(instructions|prompt)|"
-    r"ignore\s+(all\s+)?(previous|prior)?\s*(rules|instructions)|"
+    r"(ignore|disregard)\s+(all\s+)?(previous|prior|the\s+above)?\s*(rules|instructions)|"
     r"forget\s+(that\s+)?you(’re|'re|\s+are)|"
-    r"you\s+are\s+now\s+(unrestricted|a\s+general|an?\s+ai\s+without)|"
+    r"you\s+are\s+now\s+(an?\s+)?(unrestricted|a\s+general|an?\s+ai\s+without)|"
+    r"(pretend\s+you\s+are\s+dan\b|\bdo\s+anything\s+now\b)|"
     r"developer\s+mode)",
     re.IGNORECASE,
 )
@@ -669,6 +680,55 @@ WET_SURFACE_MESSAGE = (
 
 def is_wet_surface_question(text: str) -> bool:
     return bool(_WET_SURFACE_PATTERN.search(text))
+
+
+# Rule 8 already says curved surfaces can never be measured, and "can I measure a curved
+# arch/wall/window" reliably gets a direct no - but "rounded" (an exact synonym in this
+# context) doesn't reliably trigger the same rule; testing found it asks an unnecessary
+# clarifying question instead, consistently (2/2), even though a rounded arch is
+# unambiguously curved. Answered deterministically for the same reason as everything else
+# here: the model doesn't reliably generalize "rounded" to mean the same thing as "curved."
+_CURVED_SURFACE_PATTERN = re.compile(
+    r"\b(curved|rounded|circular|oval)\b.{0,30}\b(arch|arches|wall|walls|window|windows|"
+    r"surface|surfaces|door|doorway|shape)\b|"
+    r"\b(arch|arches|wall|walls|window|windows|surface|surfaces|door|doorway)\b.{0,30}"
+    r"\b(curved|rounded|circular|oval)\b",
+    re.IGNORECASE,
+)
+
+CURVED_SURFACE_MESSAGE = (
+    "Unfortunately, Geometra isn't able to measure that since it's a curved surface - it's "
+    "designed specifically for flat, closed, non-curved shapes, regardless of how many "
+    "corners are visible. I'd be happy to help with anything else in the room you'd like "
+    "measured!"
+)
+
+
+def is_curved_surface_question(text: str) -> bool:
+    return bool(_CURVED_SURFACE_PATTERN.search(text))
+
+
+# The reverse gap: the prompt itself says arches are measurable "when they're angular/
+# quadrilateral in shape," treating the two words as synonyms - but testing found "angular
+# arch" reliably (3/3) gets a wrong "no, cannot measure," while "quadrilateral arch" (the
+# other half of the same sentence) correctly gets "yes." The model isn't generalizing
+# "angular" the way the prompt intends, so this is answered deterministically too.
+_ANGULAR_ARCH_PATTERN = re.compile(
+    r"\b(angular)\b.{0,30}\b(arch|arches|archway|archways)\b|"
+    r"\b(arch|arches|archway|archways)\b.{0,30}\b(angular)\b",
+    re.IGNORECASE,
+)
+
+ANGULAR_ARCH_MESSAGE = (
+    "Yes, an angular arch is measurable with Geometra - arches count as long as they're "
+    "angular/quadrilateral in shape (a rounded or curved arch is the only kind that's "
+    "excluded). Just make sure it's a closed shape with at least 3 corners visible in the "
+    "photo."
+)
+
+
+def is_angular_arch_question(text: str) -> bool:
+    return bool(_ANGULAR_ARCH_PATTERN.search(text))
 
 
 # Prompt wording alone couldn't get Pass 2 to reliably use the literal [CLARIFY] tag in
@@ -921,6 +981,15 @@ def process_turn(query, history, awaiting):
     # SAFETY judgment was misfiring on this benign topic roughly a quarter of the time.
     if is_wet_surface_question(query):
         return WET_SURFACE_MESSAGE, None
+
+    # See is_curved_surface_question() - answered deterministically since "rounded" wasn't
+    # reliably generalized to the same rule "curved" already triggers correctly.
+    if awaiting is None and is_curved_surface_question(query):
+        return CURVED_SURFACE_MESSAGE, None
+
+    # See is_angular_arch_question() - the positive-case counterpart to the check above.
+    if awaiting is None and is_angular_arch_question(query):
+        return ANGULAR_ARCH_MESSAGE, None
 
     # A genuine troubleshooting attempt was already given last turn (see the
     # already_clarified handling below) - checked here, in code, rather than leaving Pass
