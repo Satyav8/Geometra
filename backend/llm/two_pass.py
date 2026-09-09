@@ -271,13 +271,28 @@ _EXCLUDED_CATEGORIES = (
         # common in room names - "kids' room," "baby's room," "man cave," "ladies room" are
         # all legitimate spaces to measure, not people. Without it, "can I measure my kids
         # room" would wrongly get excluded as "a living thing."
+        #
+        # "guys?" alone missed the informal synonym "dude" (and "fella"/"bloke"/"chap"/"bro")
+        # - confirmed via testing to reproduce the exact same disparity this gate was built
+        # to prevent: "can I measure an asian dude" hit a hard SAFETY refusal, while "can I
+        # measure a black dude" got sanitized into an unrelated "black wall" question and
+        # answered "yes" - neither correct, both avoided entirely once "dude" is caught here
+        # like every other everyday word for a person.
+        #
+        # The room-name lookahead only protected direct adjacency ("man cave," "kids' room")
+        # - "my bro's man cave" has "man" sitting between "bro's" and "cave," so "bro" wasn't
+        # protected and got wrongly excluded as a living thing. Added an explicit "(man )?cave"
+        # option to the lookahead so a possessive immediately before the whole "man cave" idiom
+        # is protected too, without loosening the lookahead generally (which would risk new
+        # false negatives elsewhere).
         re.compile(
             r"\b(trees?|plants?|dogs?|cats?|humans?|persons?|people|animals?|insects?|"
-            r"birds?|flowers?|men|man|women|woman|guys?|boys?|girls?|kids?|child|"
+            r"birds?|flowers?|men|man|women|woman|guys?|dudes?|fellas?|blokes?|chaps?|"
+            r"bros?|boys?|girls?|kids?|child|"
             r"children|baby|babies|lady|ladies|gentlemen|gentleman|adults?|"
             r"teenagers?|toddlers?)\b"
-            r"(?!['’]?s?[\s-]+(room|rooms|cave|bedroom|bedrooms|den|office|nursery|"
-            r"playroom|bathroom|closet|corner|area|space|suite|zone|wardrobe|cabin))",
+            r"(?!['’]?s?[\s-]+(room|rooms|(?:man\s+)?caves?|bedroom|bedrooms|den|office|"
+            r"nursery|playroom|bathroom|closet|corner|area|space|suite|zone|wardrobe|cabin))",
             re.IGNORECASE,
         ),
         "it's a living thing",
@@ -298,11 +313,18 @@ _EXCLUDED_CATEGORIES = (
         "it's a natural element",
     ),
     (
+        # "wallet" wasn't literally named here, and Rule 8C's own text says the list is
+        # "illustrative, not exhaustive" and that a clearly-fitting item should never get a
+        # clarifying question before being excluded - but testing found "can I measure a
+        # wallet" got exactly that (asking about corner count and size) instead of a direct
+        # no, since it wasn't deterministically caught here like its close cousins
+        # (bags, currency, luggage) already were.
         re.compile(
             r"\b(pens?|pencils?|phones?|smartphones?|laptops?|tablets?|ipads?|books?|"
             r"headphones?|earphones?|wires?|scissors|printers?|microwaves?|toys?|"
             r"rockets?|drones?|helmets?|trophy|trophies|vases?|speakers?|"
-            r"utensils?|cosmetics?|currency|coins?|clothes|clothing|luggage|bags?|"
+            r"utensils?|cosmetics?|currency|coins?|wallets?|purses?|clothes|clothing|"
+            r"luggage|bags?|backpacks?|rucksacks?|knapsacks?|"
             r"garbage|dustbins?|(trash|waste)\s*(can|bin|basket)s?|wastebaskets?|"
             r"globes?|curtains?|paintbrush(es)?|torches?|needles?|remotes?|"
             r"keyboards?|mouse|umbrellas?)\b",
@@ -315,8 +337,16 @@ _EXCLUDED_CATEGORIES = (
         "it's a reflective or transparent surface",
     ),
     (
+        # Rule 8C explicitly lists "celestial bodies" under this same category, but nothing
+        # deterministic caught it - "can I measure a black hole's event horizon" hit a hard
+        # SAFETY refusal instead, since the LLM's own judgment misfired on the bizarre/novel
+        # phrasing rather than reasoning it through as an ordinary Rule 8C exclusion.
+        # Deliberately narrow (no "star," "moon," "sun") - those have common non-astronomical
+        # meanings (a star- or moon-shaped mirror/light fixture is a real measurable object).
         re.compile(
-            r"\b(mountains?|monuments?|towers?|poles?|zoos?|race\s*tracks?|streets?)\b",
+            r"\b(mountains?|monuments?|towers?|poles?|zoos?|race\s*tracks?|streets?|"
+            r"black\s*holes?|event\s+horizons?|galax(?:y|ies)|nebul(?:a|ae|as)|"
+            r"asteroids?|comets?|supernovae?|supernovas?)\b",
             re.IGNORECASE,
         ),
         "it's a standalone outdoor structure, not part of a room or hall",
