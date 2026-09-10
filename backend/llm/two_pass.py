@@ -749,6 +749,17 @@ def process_turn(
     if is_flagged_by_moderation(moderation_text):
         return _short_circuit(SAFETY_REFUSAL_MESSAGE)
 
+    # A message carrying a decodable base64 payload never reaches Pass 1/2, whether or not
+    # the decoded content turned out to be unsafe. Two reasons, both found in production
+    # testing: the moderation call above doesn't reliably flag hate speech once it's
+    # diluted by the surrounding base64 noise, and letting an opaque blob through to two
+    # full LLM calls was the single worst latency path in the whole pipeline - it was the
+    # only case in an 18-case production battery that failed, timing out past 120s. No
+    # genuine customer of a wall-measurement product sends base64 to support, so treating
+    # it as out of scope costs nothing real and removes the pathological path entirely.
+    if decoded_payloads:
+        return _short_circuit(OUT_OF_SCOPE_MESSAGE)
+
     # See is_solid_representation_question() - answered deterministically, not left to
     # Pass 2, since this specific question kept regressing no matter how the prompt was
     # worded. Checked against raw_query, not the typo-corrected query - see the
