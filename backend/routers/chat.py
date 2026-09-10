@@ -2,7 +2,7 @@ import time
 import uuid
 from typing import List
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
 
 from config import (
     CHECK_IN_MESSAGE,
@@ -51,7 +51,7 @@ def _validate_request(chat_request: ChatRequest) -> None:
 # endpoint that spends real OpenAI/Qdrant money per call, not a fairness mechanism.
 @limiter.limit("20/minute")
 @limiter.limit("200/hour")
-def chat(request: Request, chat_request: ChatRequest) -> ChatResponse:
+def chat(request: Request, chat_request: ChatRequest, background_tasks: BackgroundTasks) -> ChatResponse:
     start_time = time.time()
     _validate_request(chat_request)
 
@@ -149,28 +149,38 @@ def chat(request: Request, chat_request: ChatRequest) -> ChatResponse:
         output_tokens=result.output_tokens,
     )
 
-    if is_unknown_question:
-        # Sent after write_message so the transcript includes this turn's own record.
-        send_ticket_email(ticket_number, chat_request.session_id, get_session_messages(chat_request.session_id))
+    # Everything below this point is internal bookkeeping the customer never waits on:
+    # the ticket email, the log-integrity metric, the evaluation-log write and the turn
+    # counter. On Supabase each of these is its own network round trip, and measured
+    # against production they were adding seconds to the reply the customer is sitting
+    # there waiting for. Handed to a background task so the response goes out first.
+    #
+    # write_message() above deliberately stays synchronous: the next turn's Pass 1 reads
+    # this session's transcript back via get_session_messages(), so deferring that one
+    # write could cost the following turn its conversation history.
+    def _log_and_notify() -> None:
+        if is_unknown_question:
+            # Sent after write_message so the transcript includes this turn's own record.
+            send_ticket_email(ticket_number, chat_request.session_id, get_session_messages(chat_request.session_id))
 
-    integrity_result = sqlite_log_integrity(
-        message_id,
-        {
-            "session_id": chat_request.session_id,
-            "turn_number": chat_request.turn_number,
-            "query": chat_request.query,
-            "response": response,
-            "confidence_level": confidence_level,
-            "is_unknown_question": is_unknown_question,
-            "response_latency_ms": response_latency_ms,
-            "input_tokens": result.input_tokens,
-            "output_tokens": result.output_tokens,
-        },
-    )
-    evaluation.append(integrity_result)
+        integrity_result = sqlite_log_integrity(
+            message_id,
+            {
+                "session_id": chat_request.session_id,
+                "turn_number": chat_request.turn_number,
+                "query": chat_request.query,
+                "response": response,
+                "confidence_level": confidence_level,
+                "is_unknown_question": is_unknown_question,
+                "response_latency_ms": response_latency_ms,
+                "input_tokens": result.input_tokens,
+                "output_tokens": result.output_tokens,
+            },
+        )
+        write_evaluation_logs(message_id, evaluation + [integrity_result])
+        increment_session_turns(chat_request.session_id)
 
-    write_evaluation_logs(message_id, evaluation)
-    increment_session_turns(chat_request.session_id)
+    background_tasks.add_task(_log_and_notify)
 
     return ChatResponse(
         session_id=chat_request.session_id,
