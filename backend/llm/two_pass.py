@@ -37,6 +37,10 @@ from config import (
 from llm.client import call_llm
 from llm.guardrails import check_numerical_hallucination, check_response_length
 from llm.moderation import is_flagged_by_moderation
+from llm.multilingual_profanity import (
+    ALL_TERMS as MULTILINGUAL_PROFANITY_TERMS,
+    contains_native_script_profanity,
+)
 from llm.prompts import (
     TWO_PASS_ANSWER_PROMPT,
     TWO_PASS_UNDERSTAND_PROMPT,
@@ -166,6 +170,13 @@ profanity.add_censor_words([
     "dipshit", "dipshits", "asswipe", "asswipes", "b!tch", "b!tches",
 ])
 
+# Languages the paid moderation classifier was measured NOT to cover - overwhelmingly the
+# Indian ones, in both romanized and native script, which is exactly the wrong gap for an
+# India-facing product. Registered here rather than in llm/multilingual_profanity.py so
+# every layer built below (including the elongation patterns) picks them up identically to
+# the English terms. See that module for the measurements and the false-positive rules.
+profanity.add_censor_words(MULTILINGUAL_PROFANITY_TERMS)
+
 
 # Classic filter-evasion technique - stretching a word out with repeated letters
 # ("bitchhhh", "nigggga") - defeats both better_profanity's own matching (no built-in
@@ -190,6 +201,11 @@ _ELONGATION_PATTERNS = [
 
 def is_severe_slur(text: str) -> bool:
     if profanity.contains_profanity(text):
+        return True
+    # better-profanity cannot match non-ASCII at all (see llm/multilingual_profanity.py -
+    # even an exact-match single Devanagari word registered via add_censor_words() comes
+    # back False), so native-script terms are matched separately rather than through it.
+    if contains_native_script_profanity(text):
         return True
     # A typo'd slur ("niggga") can dodge the library's own pattern-matching while still
     # being close enough that the spellchecker resolves it to the real word ("nigger") -

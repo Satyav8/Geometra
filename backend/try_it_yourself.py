@@ -18,6 +18,10 @@ from rag.embedder import embed_text
 from rag.spelling import correct_query, has_no_correction_candidates
 from llm.client import call_llm
 from llm.moderation import is_flagged_by_moderation
+from llm.multilingual_profanity import (
+    ALL_TERMS as MULTILINGUAL_PROFANITY_TERMS,
+    contains_native_script_profanity,
+)
 from llm.prompts import SYSTEM_PROMPT
 from models import SourceChunk
 from config import (
@@ -470,6 +474,10 @@ profanity.add_censor_words([
     "cripple", "crippled", "tranny", "trannies", "towelhead", "towelheads",
     "dipshit", "dipshits", "asswipe", "asswipes", "b!tch", "b!tches",
 ])
+
+# Languages the paid moderation classifier was measured NOT to cover - see
+# llm/multilingual_profanity.py (mirrored here per this file's sync convention).
+profanity.add_censor_words(MULTILINGUAL_PROFANITY_TERMS)
 
 # Classic filter-evasion technique - stretching a word out with repeated letters
 # ("bitchhhh", "nigggga") - defeats both better_profanity's own matching (no built-in
