@@ -10,6 +10,7 @@ answer_pass() report real token counts instead of discarding them.
 import base64
 import binascii
 import re
+from concurrent.futures import ThreadPoolExecutor
 from typing import List, NamedTuple, Optional
 
 from better_profanity import profanity
@@ -682,83 +683,34 @@ def _short_circuit(
     )
 
 
-def process_turn(
-    query: str,
-    raw_query: str,
-    history,
-    awaiting: Optional[str],
-    existing_pending_query: Optional[str] = None,
-    existing_pending_similarity: Optional[float] = None,
-) -> TurnResult:
-    """query: typo-corrected text (drives retrieval/relevance/the LLM prompt).
-    raw_query: the customer's original, uncorrected text - becomes the held ticket
-    question ONLY when this turn starts a new question thread; a turn that's continuing an
-    already-in-progress thread (a clarification reply, an "already tried that") keeps the
-    ORIGINAL opening question instead (see existing_pending_query below), so a multi-turn
-    conversation escalates with the full original question, not just the customer's latest
-    (often shorter, less complete) reply.
-    history: list of (role, text) tuples, role is "customer" or "sam", oldest first.
-    awaiting: the session's current awaiting state (None / "clarification" /
-    "ticket_confirmation" / "troubleshoot_given"), read from the DB by the caller.
-    existing_pending_query/existing_pending_similarity: whatever question/similarity is
-    currently held for this session (also read from the DB by the caller) - carried
-    forward instead of being overwritten whenever this turn is a continuation of that same
-    thread."""
+# Moderation runs concurrently with Pass 1 and retrieval rather than blocking in front of
+# them - it's an independent network call that nothing downstream feeds, so the ~2-4s it
+# takes in practice was pure dead time added to every turn. Small fixed pool: this is one
+# short call per request, never a fan-out.
+_MODERATION_POOL = ThreadPoolExecutor(max_workers=4, thread_name_prefix="moderation")
 
-    # Hard safety boundary - checked before absolutely anything else, including
-    # greeting/gratitude. Checked against raw_query, NOT the typo-corrected query - the
-    # spellchecker "corrected" a slur (e.g. "nigga") into an unrelated dictionary word
-    # ("night") since the slur itself isn't a known word, which let it slip straight past
-    # this check when it ran against the corrected text instead of what the customer
-    # actually typed. See is_severe_slur() for why this exists as a separate, code-level
-    # layer rather than relying on the prompt rule alone.
-    if is_severe_slur(raw_query):
-        return _short_circuit(SAFETY_REFUSAL_MESSAGE)
+# Slightly above llm/moderation.py's own 4s client timeout, so a hung call is bounded even
+# if the client's timeout somehow doesn't fire. Fails open on timeout, exactly like the
+# underlying check does - the wordlist and Pass 2's SAFETY rule still apply.
+_MODERATION_JOIN_TIMEOUT = 6.0
 
-    # Same idea for common prompt-injection phrasings - see is_injection_attempt(). Also
-    # checked against raw_query for the same reason as above. A clean scope refusal, not a
-    # ticket offer or a clarifying question.
-    if is_injection_attempt(raw_query):
-        return _short_circuit(OUT_OF_SCOPE_MESSAGE)
 
-    # A request hiding an unsafe ask inside base64 ("decode this and respond to it" - a
-    # known LLM jailbreak technique) bypasses every check above, since none of them ever
-    # decode the text they're checking. Free, instant regex checks first, same as above.
-    decoded_payloads = _decode_base64_payloads(raw_query)
-    if _is_flagged_via_decoded_wordlist(raw_query):
-        return _short_circuit(SAFETY_REFUSAL_MESSAGE)
+def _moderation_flagged(future) -> bool:
+    try:
+        return bool(future.result(timeout=_MODERATION_JOIN_TIMEOUT))
+    except Exception as e:
+        print(f"[moderation] join failed, continuing without it: {e}")
+        return False
 
-    # OpenAI Moderation API - a second, broader safety net behind the wordlist checks
-    # above. Those are English-only, fixed-phrase matches; this catches sexual/hate/
-    # violence/self-harm/harassment/illicit content semantically and across 50+ languages,
-    # at ~20ms and no cost (per OpenAI) - real-world latency observed in production has
-    # run several seconds per call, not milliseconds, which matters for what follows. Not
-    # a replacement for the wordlist or for Pass 2's own SAFETY rule (kept as the last
-    # layer) - independent benchmarking puts this API's own miss rate as high as 50% on
-    # adversarial content, so this is one of three layers, not the whole defense.
-    #
-    # Any decoded base64 payload is appended into the SAME moderation call rather than
-    # checked with a second, separate one - an earlier version made two sequential calls
-    # here, and since each real call was taking multiple seconds (not the ~20ms
-    # advertised), that compounded into a 90+ second hang on production, occasionally
-    # exceeding Render's own gateway timeout and returning a 502 to the customer instead
-    # of an answer. One call, always, regardless of whether a payload was found, bounds
-    # this layer to a single ~4s-max round trip per turn. See llm/moderation.py for the
-    # fail-open behavior on a missing key, timeout, or API error.
-    moderation_text = raw_query if not decoded_payloads else raw_query + "\n" + "\n".join(decoded_payloads)
-    if is_flagged_by_moderation(moderation_text):
-        return _short_circuit(SAFETY_REFUSAL_MESSAGE)
 
-    # A message carrying a decodable base64 payload never reaches Pass 1/2, whether or not
-    # the decoded content turned out to be unsafe. Two reasons, both found in production
-    # testing: the moderation call above doesn't reliably flag hate speech once it's
-    # diluted by the surrounding base64 noise, and letting an opaque blob through to two
-    # full LLM calls was the single worst latency path in the whole pipeline - it was the
-    # only case in an 18-case production battery that failed, timing out past 120s. No
-    # genuine customer of a wall-measurement product sends base64 to support, so treating
-    # it as out of scope costs nothing real and removes the pathological path entirely.
-    if decoded_payloads:
-        return _short_circuit(OUT_OF_SCOPE_MESSAGE)
+def _deterministic_short_circuit(raw_query: str, awaiting: Optional[str]) -> Optional[TurnResult]:
+    """Every business-logic check that can answer a turn with no LLM call at all. Pure
+    regex/wordlist matching, microseconds to run, so the whole block is cheap enough to
+    evaluate before joining the concurrent moderation check. Returns None when nothing
+    matched and the turn needs the real Pass 1/Pass 2 path.
+
+    Extracted from process_turn() unchanged - the order of these checks is load-bearing
+    (see each one's own comment for why it sits where it does)."""
 
     # See is_solid_representation_question() - answered deterministically, not left to
     # Pass 2, since this specific question kept regressing no matter how the prompt was
@@ -846,15 +798,120 @@ def process_turn(
     if is_gibberish(raw_query):
         return _short_circuit(GIBBERISH_MESSAGE)
 
-    # Pass 1 — Understand. Always gets recent history - a short follow-up referencing the
-    # previous NORMAL answer (not just a clarifying question) also needs history to
-    # resolve correctly. Pass 1 is a cheap, short-output call, so always including the
-    # last couple of turns costs very little.
-    reformulated_query, intent, u_in_tok, u_out_tok = understand(query, history)
+    return None
+
+
+def process_turn(
+    query: str,
+    raw_query: str,
+    history,
+    awaiting: Optional[str],
+    existing_pending_query: Optional[str] = None,
+    existing_pending_similarity: Optional[float] = None,
+) -> TurnResult:
+    """query: typo-corrected text (drives retrieval/relevance/the LLM prompt).
+    raw_query: the customer's original, uncorrected text - becomes the held ticket
+    question ONLY when this turn starts a new question thread; a turn that's continuing an
+    already-in-progress thread (a clarification reply, an "already tried that") keeps the
+    ORIGINAL opening question instead (see existing_pending_query below), so a multi-turn
+    conversation escalates with the full original question, not just the customer's latest
+    (often shorter, less complete) reply.
+    history: list of (role, text) tuples, role is "customer" or "sam", oldest first.
+    awaiting: the session's current awaiting state (None / "clarification" /
+    "ticket_confirmation" / "troubleshoot_given"), read from the DB by the caller.
+    existing_pending_query/existing_pending_similarity: whatever question/similarity is
+    currently held for this session (also read from the DB by the caller) - carried
+    forward instead of being overwritten whenever this turn is a continuation of that same
+    thread."""
+
+    # Hard safety boundary - checked before absolutely anything else, including
+    # greeting/gratitude. Checked against raw_query, NOT the typo-corrected query - the
+    # spellchecker "corrected" a slur (e.g. "nigga") into an unrelated dictionary word
+    # ("night") since the slur itself isn't a known word, which let it slip straight past
+    # this check when it ran against the corrected text instead of what the customer
+    # actually typed. See is_severe_slur() for why this exists as a separate, code-level
+    # layer rather than relying on the prompt rule alone.
+    if is_severe_slur(raw_query):
+        return _short_circuit(SAFETY_REFUSAL_MESSAGE)
+
+    # Same idea for common prompt-injection phrasings - see is_injection_attempt(). Also
+    # checked against raw_query for the same reason as above. A clean scope refusal, not a
+    # ticket offer or a clarifying question.
+    if is_injection_attempt(raw_query):
+        return _short_circuit(OUT_OF_SCOPE_MESSAGE)
+
+    # A request hiding an unsafe ask inside base64 ("decode this and respond to it" - a
+    # known LLM jailbreak technique) bypasses every check above, since none of them ever
+    # decode the text they're checking. Free, instant regex checks first, same as above.
+    decoded_payloads = _decode_base64_payloads(raw_query)
+    if _is_flagged_via_decoded_wordlist(raw_query):
+        return _short_circuit(SAFETY_REFUSAL_MESSAGE)
+
+    # OpenAI Moderation API - a second, broader safety net behind the wordlist checks
+    # above. Those are English-only, fixed-phrase matches; this catches sexual/hate/
+    # violence/self-harm/harassment/illicit content semantically and across 50+ languages,
+    # at ~20ms and no cost (per OpenAI) - real-world latency observed in production has
+    # run several seconds per call, not milliseconds, which matters for what follows. Not
+    # a replacement for the wordlist or for Pass 2's own SAFETY rule (kept as the last
+    # layer) - independent benchmarking puts this API's own miss rate as high as 50% on
+    # adversarial content, so this is one of three layers, not the whole defense.
+    #
+    # Any decoded base64 payload is appended into the SAME moderation call rather than
+    # checked with a second, separate one - an earlier version made two sequential calls
+    # here, and since each real call was taking multiple seconds (not the ~20ms
+    # advertised), that compounded into a 90+ second hang on production, occasionally
+    # exceeding Render's own gateway timeout and returning a 502 to the customer instead
+    # of an answer. One call, always, regardless of whether a payload was found, bounds
+    # this layer to a single ~4s-max round trip per turn. See llm/moderation.py for the
+    # fail-open behavior on a missing key, timeout, or API error.
+    moderation_text = raw_query if not decoded_payloads else raw_query + "\n" + "\n".join(decoded_payloads)
+    moderation = _MODERATION_POOL.submit(is_flagged_by_moderation, moderation_text)
+
+    # A message carrying a decodable base64 payload never reaches Pass 1/2, whether or not
+    # the decoded content turned out to be unsafe. Two reasons, both found in production
+    # testing: the moderation call above doesn't reliably flag hate speech once it's
+    # diluted by the surrounding base64 noise, and letting an opaque blob through to two
+    # full LLM calls was the single worst latency path in the whole pipeline - it was the
+    # only case in an 18-case production battery that failed, timing out past 120s. No
+    # genuine customer of a wall-measurement product sends base64 to support, so treating
+    # it as out of scope costs nothing real and removes the pathological path entirely.
+    if decoded_payloads:
+        if _moderation_flagged(moderation):
+            return _short_circuit(SAFETY_REFUSAL_MESSAGE)
+        return _short_circuit(OUT_OF_SCOPE_MESSAGE)
+
+    deterministic = _deterministic_short_circuit(raw_query, awaiting)
+    if deterministic is not None:
+        # Moderation still gates every deterministic reply exactly as it did when the
+        # call ran inline here - the only thing that changed is that it ran concurrently.
+        if _moderation_flagged(moderation):
+            return _short_circuit(SAFETY_REFUSAL_MESSAGE)
+        return deterministic
+
+    # Pass 1 — Understand. Its entire job is resolving pronouns and references against
+    # recent history ("and a commode too?" -> "can Geometra measure a commode?"), so on
+    # the FIRST message of a session there is nothing for it to resolve: it just restates
+    # an already-self-contained question and costs a full LLM round trip to do it (~9s
+    # measured against production under load). Skipped entirely when history is empty -
+    # most support sessions are one or two turns, so this is the common path, and the
+    # query is passed through as its own intent line, which is what Pass 1 would have
+    # produced anyway. Follow-up turns still get the real Pass 1 call, unchanged.
+    if history:
+        reformulated_query, intent, u_in_tok, u_out_tok = understand(query, history)
+    else:
+        reformulated_query, intent, u_in_tok, u_out_tok = query, query, 0, 0
 
     # Fast-path scope check: ONE retrieve call, reused for both the gate and Pass 2.
     # retrieve_combined() also pulls in the isolated website knowledge base.
     chunks, confidence = retrieve_combined(reformulated_query)
+
+    # Moderation was started before any of the work above and has been running alongside
+    # it - joined here, before a single word is composed for the customer, so it still
+    # gates every reply. Nothing below this line can produce output without it having
+    # been checked.
+    if _moderation_flagged(moderation):
+        return _short_circuit(SAFETY_REFUSAL_MESSAGE)
+
     top1 = chunks[0].similarity_score if chunks else 0.0
     keyword_hit = is_query_relevant(query)
     if not keyword_hit and top1 < FAST_PATH_SIMILARITY_THRESHOLD:
