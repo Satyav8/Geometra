@@ -23,10 +23,28 @@ def call_llm(system_prompt: str, user_message: str) -> Tuple[str, int, int]:
     raise ValueError(f"Unsupported LLM_PROVIDER: {LLM_PROVIDER}")
 
 
+# Found via production debugging: the openai SDK's own defaults (600s timeout, 2
+# automatic retries) meant a genuine connectivity blip to the provider (an SSL handshake
+# timeout, observed directly) could hang a single call for minutes rather than seconds -
+# and this function runs 2-3 times per customer turn (Understand, Answer, an occasional
+# hedge-retry), so an unbounded hang here is far more customer-visible than the same gap
+# in the redundant moderation layer. 20s is generous next to the 1-10s normal successful
+# calls actually take (per this project's own logged latencies), while still bounding a
+# real outage to a a few tens of seconds instead of minutes. One retry, not zero - unlike
+# the moderation check, there's no other layer that produces the customer's actual answer
+# if this fails, so a single retry for a transient blip is worth the modest extra latency
+# it costs on the rare case it's needed.
+_LLM_TIMEOUT_SECONDS = 20.0
+_LLM_MAX_RETRIES = 1
+
+
 def _call_groq(system_prompt: str, user_message: str) -> Tuple[str, int, int]:
     from openai import OpenAI
 
-    client = OpenAI(api_key=GROQ_API_KEY, base_url="https://api.groq.com/openai/v1")
+    client = OpenAI(
+        api_key=GROQ_API_KEY, base_url="https://api.groq.com/openai/v1",
+        timeout=_LLM_TIMEOUT_SECONDS, max_retries=_LLM_MAX_RETRIES,
+    )
     completion = client.chat.completions.create(
         model=LLM_MODEL,
         messages=[
@@ -44,7 +62,7 @@ def _call_groq(system_prompt: str, user_message: str) -> Tuple[str, int, int]:
 def _call_openai(system_prompt: str, user_message: str) -> Tuple[str, int, int]:
     from openai import OpenAI
 
-    client = OpenAI(api_key=OPENAI_API_KEY)
+    client = OpenAI(api_key=OPENAI_API_KEY, timeout=_LLM_TIMEOUT_SECONDS, max_retries=_LLM_MAX_RETRIES)
     completion = client.chat.completions.create(
         model=LLM_MODEL,
         messages=[

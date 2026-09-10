@@ -1014,9 +1014,9 @@ def _decode_base64_payloads(text):
     return payloads
 
 
-def is_flagged_via_encoded_payload(text):
+def _is_flagged_via_decoded_wordlist(text):
     return any(
-        is_severe_slur(decoded) or is_injection_attempt(decoded) or is_flagged_by_moderation(decoded)
+        is_severe_slur(decoded) or is_injection_attempt(decoded)
         for decoded in _decode_base64_payloads(text)
     )
 
@@ -1037,13 +1037,19 @@ def process_turn(query, history, awaiting):
     if is_injection_attempt(query):
         return OUT_OF_SCOPE_MESSAGE, None
 
-    # OpenAI Moderation API - a second, broader safety net behind the wordlist checks
-    # above. See llm/moderation.py for the full reasoning (mirrored here per this file's
-    # own sync convention with llm/two_pass.py).
-    if is_flagged_by_moderation(query):
+    # Free, instant regex checks on any base64-decoded payload first - see
+    # _decode_base64_payloads() above.
+    decoded_payloads = _decode_base64_payloads(query)
+    if _is_flagged_via_decoded_wordlist(query):
         return SAFETY_REFUSAL_MESSAGE, None
 
-    if is_flagged_via_encoded_payload(query):
+    # OpenAI Moderation API - a second, broader safety net behind the wordlist checks
+    # above. See llm/moderation.py and llm/two_pass.py for the full reasoning (mirrored
+    # here per this file's own sync convention) - notably, any decoded payload is folded
+    # into this SAME call rather than a second separate one, since two sequential real
+    # network calls here compounded into a 90+ second production hang.
+    moderation_text = query if not decoded_payloads else query + "\n" + "\n".join(decoded_payloads)
+    if is_flagged_by_moderation(moderation_text):
         return SAFETY_REFUSAL_MESSAGE, None
 
     # See is_solid_representation_question() - answered deterministically, not left to
