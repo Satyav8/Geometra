@@ -4,6 +4,8 @@ throwaway test tool, nothing here is wired into routers/chat.py or committed beh
 Run: ./venv/Scripts/python.exe try_it_yourself.py
 Type 'exit' to quit.
 """
+import base64
+import binascii
 import re
 import sys
 
@@ -15,6 +17,7 @@ from rag.relevance import is_gratitude, is_greeting, is_query_relevant
 from rag.embedder import embed_text
 from rag.spelling import correct_query, has_no_correction_candidates
 from llm.client import call_llm
+from llm.moderation import is_flagged_by_moderation
 from llm.prompts import SYSTEM_PROMPT
 from models import SourceChunk
 from config import (
@@ -992,6 +995,32 @@ TICKET_ESCALATION_MESSAGE = (
 )
 
 
+# See llm/two_pass.py's is_flagged_via_encoded_payload() for the full reasoning
+# (mirrored here per this file's own sync convention). Catches an unsafe request
+# smuggled in via base64 encoding, which no check above ever decodes and so never sees.
+_BASE64_CANDIDATE_RE = re.compile(r"[A-Za-z0-9+/]{20,}={0,2}")
+
+
+def _decode_base64_payloads(text):
+    payloads = []
+    for candidate in _BASE64_CANDIDATE_RE.findall(text):
+        try:
+            decoded = base64.b64decode(candidate, validate=True).decode("utf-8")
+        except (binascii.Error, ValueError, UnicodeDecodeError):
+            continue
+        printable = sum(1 for c in decoded if c.isprintable() or c in "\n\t")
+        if len(decoded.strip()) >= 4 and printable / len(decoded) >= 0.85:
+            payloads.append(decoded)
+    return payloads
+
+
+def is_flagged_via_encoded_payload(text):
+    return any(
+        is_severe_slur(decoded) or is_injection_attempt(decoded) or is_flagged_by_moderation(decoded)
+        for decoded in _decode_base64_payloads(text)
+    )
+
+
 def process_turn(query, history, awaiting):
     """Returns (response_text, new_awaiting_state)."""
     TICKET_RAISED_MESSAGE = "[TEST] Ticket would be raised here — last 3 turns emailed via Resend."
@@ -1007,6 +1036,15 @@ def process_turn(query, history, awaiting):
     # customer "needs regarding Geometra."
     if is_injection_attempt(query):
         return OUT_OF_SCOPE_MESSAGE, None
+
+    # OpenAI Moderation API - a second, broader safety net behind the wordlist checks
+    # above. See llm/moderation.py for the full reasoning (mirrored here per this file's
+    # own sync convention with llm/two_pass.py).
+    if is_flagged_by_moderation(query):
+        return SAFETY_REFUSAL_MESSAGE, None
+
+    if is_flagged_via_encoded_payload(query):
+        return SAFETY_REFUSAL_MESSAGE, None
 
     # See is_solid_representation_question() - answered deterministically, not left to
     # Pass 2, since this specific question kept regressing back to "it's alive" no
