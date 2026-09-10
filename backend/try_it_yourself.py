@@ -1029,6 +1029,16 @@ def _is_flagged_via_decoded_wordlist(text):
     )
 
 
+# See llm/two_pass.py's _is_non_latin_script() for the measurements behind this (mirrored
+# here per this file's sync convention): the fast-path scope gate is an English-only
+# heuristic and scores non-Latin script essentially at random, so it defers to Pass 2.
+def _is_non_latin_script(text):
+    letters = [c for c in text if c.isalpha()]
+    if not letters:
+        return False
+    return sum(1 for c in letters if ord(c) > 0x24F) / len(letters) >= 0.5
+
+
 def process_turn(query, history, awaiting):
     """Returns (response_text, new_awaiting_state)."""
     TICKET_RAISED_MESSAGE = "[TEST] Ticket would be raised here — last 3 turns emailed via Resend."
@@ -1183,7 +1193,7 @@ def process_turn(query, history, awaiting):
     chunks, confidence = retrieve_combined(reformulated_query)
     top1 = chunks[0].similarity_score if chunks else 0.0
     keyword_hit = is_query_relevant(query)
-    if not keyword_hit and top1 < FAST_PATH_SIMILARITY:
+    if not keyword_hit and top1 < FAST_PATH_SIMILARITY and not _is_non_latin_script(query):
         return OUT_OF_SCOPE_MESSAGE, None
 
     # Pass 2 — Answer / Refine. Also forces the cap when the customer signals they
