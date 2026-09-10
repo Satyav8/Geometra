@@ -1052,6 +1052,11 @@ def process_turn(query, history, awaiting):
     if is_flagged_by_moderation(moderation_text):
         return SAFETY_REFUSAL_MESSAGE, None
 
+    # A message carrying a decodable base64 payload never reaches Pass 1/2 - see
+    # llm/two_pass.py for the full reasoning (mirrored per this file's sync convention).
+    if decoded_payloads:
+        return OUT_OF_SCOPE_MESSAGE, None
+
     # See is_solid_representation_question() - answered deterministically, not left to
     # Pass 2, since this specific question kept regressing back to "it's alive" no
     # matter how the prompt was worded.
