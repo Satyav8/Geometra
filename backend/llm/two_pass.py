@@ -719,6 +719,39 @@ def _moderation_flagged(future) -> bool:
         return False
 
 
+# The fast-path scope gate is an English-only heuristic on both halves: it needs either a
+# hit in the English FAQ_KEYWORDS list or embedding similarity against an all-English
+# knowledge base. Measured against real customer-style questions, that produces noise
+# rather than signal once the text isn't in Latin script:
+#
+#   "मैं दीवार कैसे माप सकता हूँ"  (how do I measure a wall)   -> 0.144  REJECTED
+#   "मुंबई में मौसम कैसा है"        (what's the weather in Mumbai) -> 0.164  PASSED
+#
+# The off-topic question scores HIGHER than the legitimate product one, and Tamil (0.167)
+# and Urdu (0.170) cleared the 0.15 threshold while Hindi, Telugu, Marathi, Bengali and
+# Kannada did not - not because they were less on-topic, but because cross-lingual
+# similarity against an English corpus is close to random. Lowering the threshold
+# therefore fixes nothing; it just admits everything, off-topic included.
+#
+# So the gate is skipped entirely for non-Latin-script messages and Pass 2 decides scope
+# instead - it is genuinely multilingual and already has Rule 7 to reject off-topic
+# questions. The cost is one LLM call on off-topic non-Latin messages that used to be
+# rejected for free; the benefit is that Hindi/Telugu/Marathi/Bengali/Kannada customers
+# stop being told "I can only help with questions about Geometra" when they ask how to
+# measure a wall. Safety is unaffected: the slur, moderation and base64 checks all run
+# well before this point.
+#
+# Threshold 0x24F is the end of Latin Extended-B, so accented Latin (é, ñ, ü, ş) still
+# counts as Latin - only genuinely different scripts (Devanagari, Telugu, Tamil, Bengali,
+# Gurmukhi, Kannada, Malayalam, Arabic, Cyrillic, CJK, Thai) trip this.
+def _is_non_latin_script(text: str) -> bool:
+    letters = [c for c in text if c.isalpha()]
+    if not letters:
+        return False
+    non_latin = sum(1 for c in letters if ord(c) > 0x24F)
+    return non_latin / len(letters) >= 0.5
+
+
 def _deterministic_short_circuit(raw_query: str, awaiting: Optional[str]) -> Optional[TurnResult]:
     """Every business-logic check that can answer a turn with no LLM call at all. Pure
     regex/wordlist matching, microseconds to run, so the whole block is cheap enough to
@@ -930,7 +963,9 @@ def process_turn(
 
     top1 = chunks[0].similarity_score if chunks else 0.0
     keyword_hit = is_query_relevant(query)
-    if not keyword_hit and top1 < FAST_PATH_SIMILARITY_THRESHOLD:
+    # See _is_non_latin_script(): this gate can't evaluate a script its keyword list and
+    # its embedding corpus are both blind to, so it defers to Pass 2 rather than guessing.
+    if not keyword_hit and top1 < FAST_PATH_SIMILARITY_THRESHOLD and not _is_non_latin_script(raw_query):
         return TurnResult(
             response=OUT_OF_SCOPE_MESSAGE, new_awaiting=None, update_pending=False,
             pending_query=None, pending_similarity=None, chunks=[], confidence_level=confidence,
