@@ -645,9 +645,13 @@ def _decode_base64_payloads(text: str) -> List[str]:
     return payloads
 
 
-def is_flagged_via_encoded_payload(text: str) -> bool:
+def _is_flagged_via_decoded_wordlist(text: str) -> bool:
+    """Free, instant regex checks only - no network call - so this costs nothing to run
+    on every decoded payload found, unlike the moderation check (see process_turn, which
+    folds any decoded payload text into the SAME single moderation call already being
+    made on the raw message, rather than a separate one)."""
     return any(
-        is_severe_slur(decoded) or is_injection_attempt(decoded) or is_flagged_by_moderation(decoded)
+        is_severe_slur(decoded) or is_injection_attempt(decoded)
         for decoded in _decode_base64_payloads(text)
     )
 
@@ -717,20 +721,32 @@ def process_turn(
     if is_injection_attempt(raw_query):
         return _short_circuit(OUT_OF_SCOPE_MESSAGE)
 
-    # OpenAI Moderation API - a second, broader safety net behind the wordlist checks
-    # above. Those two are English-only, fixed-phrase matches; this catches sexual/hate/
-    # violence/self-harm/harassment/illicit content semantically and across 50+ languages,
-    # at ~20ms and no cost. Not a replacement for the wordlist (kept first since it's
-    # free and instant) or for Pass 2's own SAFETY rule (kept as the last layer) -
-    # independent benchmarking puts this API's own miss rate as high as 50% on
-    # adversarial content, so this is one of three layers, not the whole defense. See
-    # llm/moderation.py for the fail-open behavior on a missing key or API error.
-    if is_flagged_by_moderation(raw_query):
+    # A request hiding an unsafe ask inside base64 ("decode this and respond to it" - a
+    # known LLM jailbreak technique) bypasses every check above, since none of them ever
+    # decode the text they're checking. Free, instant regex checks first, same as above.
+    decoded_payloads = _decode_base64_payloads(raw_query)
+    if _is_flagged_via_decoded_wordlist(raw_query):
         return _short_circuit(SAFETY_REFUSAL_MESSAGE)
 
-    # See is_flagged_via_encoded_payload() - catches an unsafe request smuggled in via
-    # base64 encoding, which the checks above never decode and so never actually see.
-    if is_flagged_via_encoded_payload(raw_query):
+    # OpenAI Moderation API - a second, broader safety net behind the wordlist checks
+    # above. Those are English-only, fixed-phrase matches; this catches sexual/hate/
+    # violence/self-harm/harassment/illicit content semantically and across 50+ languages,
+    # at ~20ms and no cost (per OpenAI) - real-world latency observed in production has
+    # run several seconds per call, not milliseconds, which matters for what follows. Not
+    # a replacement for the wordlist or for Pass 2's own SAFETY rule (kept as the last
+    # layer) - independent benchmarking puts this API's own miss rate as high as 50% on
+    # adversarial content, so this is one of three layers, not the whole defense.
+    #
+    # Any decoded base64 payload is appended into the SAME moderation call rather than
+    # checked with a second, separate one - an earlier version made two sequential calls
+    # here, and since each real call was taking multiple seconds (not the ~20ms
+    # advertised), that compounded into a 90+ second hang on production, occasionally
+    # exceeding Render's own gateway timeout and returning a 502 to the customer instead
+    # of an answer. One call, always, regardless of whether a payload was found, bounds
+    # this layer to a single ~4s-max round trip per turn. See llm/moderation.py for the
+    # fail-open behavior on a missing key, timeout, or API error.
+    moderation_text = raw_query if not decoded_payloads else raw_query + "\n" + "\n".join(decoded_payloads)
+    if is_flagged_by_moderation(moderation_text):
         return _short_circuit(SAFETY_REFUSAL_MESSAGE)
 
     # See is_solid_representation_question() - answered deterministically, not left to
