@@ -7,6 +7,8 @@ stateless per call (the caller persists `awaiting`/pending-ticket state in the D
 turns) and returns a TurnResult instead of the REPL's bare tuple, and understand()/
 answer_pass() report real token counts instead of discarding them.
 """
+import base64
+import binascii
 import re
 from typing import List, NamedTuple, Optional
 
@@ -33,6 +35,7 @@ from config import (
 )
 from llm.client import call_llm
 from llm.guardrails import check_numerical_hallucination, check_response_length
+from llm.moderation import is_flagged_by_moderation
 from llm.prompts import (
     TWO_PASS_ANSWER_PROMPT,
     TWO_PASS_UNDERSTAND_PROMPT,
@@ -613,6 +616,42 @@ def answer_pass(
     return response, input_tokens, output_tokens
 
 
+# A customer message hiding an unsafe request inside base64 ("decode this and respond
+# to it" - a known LLM jailbreak technique) bypasses every check above, since those only
+# ever look at the literal text typed; none of them see the actual instruction being
+# smuggled in. Confirmed via adversarial testing: a base64-encoded hateful request wasn't
+# caught by the wordlist or the Moderation API (neither ever saw the decoded text), and
+# only happened to get refused because Pass 2 separately decided the raw gibberish wasn't
+# a real Geometra question - a lucky scope-rejection, not genuine recognition of what was
+# being asked. This closes that gap directly: decode any base64-shaped payload found and
+# run it back through the same slur/injection/moderation checks used on the raw message.
+# A 20+ character run with no spaces from exactly the base64 alphabet essentially never
+# occurs in genuine customer text, so this has near-zero false-positive risk.
+_BASE64_CANDIDATE_RE = re.compile(r"[A-Za-z0-9+/]{20,}={0,2}")
+
+
+def _decode_base64_payloads(text: str) -> List[str]:
+    payloads = []
+    for candidate in _BASE64_CANDIDATE_RE.findall(text):
+        try:
+            decoded = base64.b64decode(candidate, validate=True).decode("utf-8")
+        except (binascii.Error, ValueError, UnicodeDecodeError):
+            continue
+        # Guards against treating decoded noise (an incidental base64-shaped run that
+        # doesn't actually carry a message) as a real payload worth re-checking.
+        printable = sum(1 for c in decoded if c.isprintable() or c in "\n\t")
+        if len(decoded.strip()) >= 4 and printable / len(decoded) >= 0.85:
+            payloads.append(decoded)
+    return payloads
+
+
+def is_flagged_via_encoded_payload(text: str) -> bool:
+    return any(
+        is_severe_slur(decoded) or is_injection_attempt(decoded) or is_flagged_by_moderation(decoded)
+        for decoded in _decode_base64_payloads(text)
+    )
+
+
 def _short_circuit(
     response: str,
     new_awaiting: Optional[str] = None,
@@ -677,6 +716,22 @@ def process_turn(
     # ticket offer or a clarifying question.
     if is_injection_attempt(raw_query):
         return _short_circuit(OUT_OF_SCOPE_MESSAGE)
+
+    # OpenAI Moderation API - a second, broader safety net behind the wordlist checks
+    # above. Those two are English-only, fixed-phrase matches; this catches sexual/hate/
+    # violence/self-harm/harassment/illicit content semantically and across 50+ languages,
+    # at ~20ms and no cost. Not a replacement for the wordlist (kept first since it's
+    # free and instant) or for Pass 2's own SAFETY rule (kept as the last layer) -
+    # independent benchmarking puts this API's own miss rate as high as 50% on
+    # adversarial content, so this is one of three layers, not the whole defense. See
+    # llm/moderation.py for the fail-open behavior on a missing key or API error.
+    if is_flagged_by_moderation(raw_query):
+        return _short_circuit(SAFETY_REFUSAL_MESSAGE)
+
+    # See is_flagged_via_encoded_payload() - catches an unsafe request smuggled in via
+    # base64 encoding, which the checks above never decode and so never actually see.
+    if is_flagged_via_encoded_payload(raw_query):
+        return _short_circuit(SAFETY_REFUSAL_MESSAGE)
 
     # See is_solid_representation_question() - answered deterministically, not left to
     # Pass 2, since this specific question kept regressing no matter how the prompt was
