@@ -415,7 +415,24 @@ _EXCLUDED_CATEGORIES = (
             r"birds?|flowers?|men|man|women|woman|guys?|dudes?|fellas?|blokes?|chaps?|"
             r"bros?|boys?|girls?|kids?|child|"
             r"children|baby|babies|lady|ladies|gentlemen|gentleman|adults?|"
-            r"teenagers?|toddlers?|"
+            r"teenagers?|toddlers?|infants?|"
+            # How people actually refer to a person standing in the room. A production
+            # smoke test caught "can I measure my friend standing by the wall" getting a
+            # hard SAFETY refusal - nothing in it is unsafe, it was simply a question no
+            # deterministic layer claimed, so Pass 2 judged it alone and over-refused. The
+            # same root cause as the animals, the celestial objects and the printers.
+            #
+            # Words that usually name a BENEFICIARY rather than a subject are deliberately
+            # left out - "client", "customer", "boss", "partner", "tenant", "landlord" -
+            # because "measure this wall for my client" is ordinary studio work and must
+            # keep answering normally. See the beneficiary guard in
+            # find_definite_exclusion_reason for the rest of that protection.
+            r"friends?|colleagues?|co[\s-]?workers?|"
+            r"brothers?|sisters?|mothers?|fathers?|mom|mum|dad|parents?|sons?|daughters?|"
+            r"wife|wives|husbands?|spouses?|girlfriends?|boyfriends?|"
+            r"neighbou?rs?|guests?|roommates?|flatmates?|housemates?|"
+            r"cousins?|uncles?|aunts?|grandmothers?|grandfathers?|grandmas?|grandpas?|"
+            r"nieces?|nephews?|"
             # mammals
             r"lions?|tigers?|leopards?|cheetahs?|jaguars?|panthers?|elephants?|giraffes?|"
             r"rhinos?|rhinoceros|hippos?|hippopotamus|zebras?|camels?|donkeys?|mules?|"
@@ -533,14 +550,31 @@ _SUBMARINE_OPERATIONAL_RE = re.compile(
 )
 
 
+# These patterns only require "measure" somewhere in the message and the excluded noun
+# somewhere else - they never check that the noun is what's actually being measured. That
+# is fine for "can I measure my dog", but "measure this wall for my client" names a person
+# who is the BENEFICIARY, not the subject, and excluding it would refuse ordinary studio
+# work. "for my <someone>" is the construction that carries this meaning, so it's removed
+# before matching. Also covers a case that was already latent before the relation words
+# were added: "measure the wall for my kids".
+#
+# Narrow on purpose - only a possessive, which is what makes it unambiguously a
+# beneficiary. "can I measure my dog for my vet" still excludes correctly, because only
+# the trailing phrase is removed and "my dog" survives.
+_BENEFICIARY_PHRASE_RE = re.compile(
+    r"\bfor\s+(?:my|our|his|her|their|its)\s+[\w'’-]+", re.IGNORECASE
+)
+
+
 def find_definite_exclusion_reason(text: str) -> Optional[str]:
     lowered = text.lower()
     if _SUBMARINE_OPERATIONAL_RE.search(lowered):
         return "it's a vehicle"
     if "measure" not in lowered and "measuring" not in lowered:
         return None
+    scanned = _BENEFICIARY_PHRASE_RE.sub(" ", lowered)
     for pattern, reason in _EXCLUDED_CATEGORIES:
-        if pattern.search(lowered):
+        if pattern.search(scanned):
             return reason
     return None
 
