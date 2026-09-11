@@ -20,6 +20,13 @@ DOMAIN_WORDS = {
     # is a required step, so these come up constantly.
     "laserjet", "deskjet", "officejet", "ecotank", "pixma", "imageclass",
     "smarttank", "inktank", "epson", "canon", "brother", "kyocera", "ricoh",
+    # Ordinary software vocabulary the dictionary doesn't know, which correction turns
+    # into unrelated - and sometimes censored - words. "logins" became "loins", which is
+    # in the profanity list, so "do we need separate logins" was flagged as abuse.
+    "login", "logins", "signup", "signin", "signout", "logout", "username",
+    "screenshot", "screenshots", "upload", "uploads", "uploading", "downloadable",
+    "workspace", "workspaces", "webapp", "browser", "wifi", "megapixel",
+    "megapixels", "rescan", "rescans", "reupload", "onboarding", "walkthrough",
 }
 
 # Below this length, corrections are more likely to mangle a legitimate short word/
