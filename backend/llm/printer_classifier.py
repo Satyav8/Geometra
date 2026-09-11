@@ -17,7 +17,8 @@ Deliberately NOT a lookup table of model prefixes. A hardcoded series list would
 permanent maintenance and would still miss models, whereas this is the model's own world
 knowledge asked cleanly. The three control cases confirm it doesn't invent an answer to
 look useful: a message with no printer named, an invented model ("Zorblax QT-9900") and an
-ordinary marker question all returned "unknown" on every run.
+ordinary marker question all returned "unknown" on every run (now "notprinter" - see
+classify_printer_type for why that distinction earns its keep).
 """
 from typing import Optional
 
@@ -31,21 +32,29 @@ nothing else:
 laser      - the model is a laser printer
 inkjet     - the model is an inkjet printer (including ink tank / EcoTank style)
 dotmatrix  - the model is a dot matrix / impact printer
-unknown    - no printer model is named, or you genuinely cannot identify the model
+unknown    - a printer is named, but you genuinely cannot identify which type it is
+notprinter - the message does not name any printer hardware at all
 
 Do not explain. Do not add punctuation. One word only."""
 
-_VALID = {"laser", "inkjet", "dotmatrix", "unknown"}
+_VALID = {"laser", "inkjet", "dotmatrix", "unknown", "notprinter"}
 
 
 def classify_printer_type(message: str) -> Optional[str]:
-    """Returns "laser" / "inkjet" / "dotmatrix" / "unknown", or None if the call failed.
+    """Returns "laser"/"inkjet"/"dotmatrix"/"unknown"/"notprinter", or None if the call
+    failed.
 
-    None and "unknown" are handled differently by the caller: "unknown" is a real answer
-    (the model genuinely couldn't identify it, so the customer gets the explain-the-three-
-    types reply), while None means the call itself broke and the turn should fall through
-    to Pass 2 exactly as it did before this module existed - the same fail-open convention
-    as llm/moderation.py.
+    The caller treats all four non-type answers differently:
+
+      "unknown"    a printer IS named but couldn't be identified - the customer gets the
+                   explain-the-three-types reply, which is still useful to them.
+      "notprinter" no printer in the message at all - falls through to Pass 2 untouched.
+                   This separation is what lets the routing gate be generous: a message
+                   that merely looks like it names hardware costs one small call and then
+                   behaves exactly as it did before, instead of getting printer guidance
+                   it never asked for.
+      None         the call itself broke - falls through to Pass 2, the same fail-open
+                   convention as llm/moderation.py.
     """
     try:
         raw, _, _ = call_llm(CLASSIFIER_PROMPT, message)
@@ -53,4 +62,4 @@ def classify_printer_type(message: str) -> Optional[str]:
         print(f"[printer] classification failed, falling through to Pass 2: {e}")
         return None
     answer = raw.strip().lower().strip(".")
-    return answer if answer in _VALID else "unknown"
+    return answer if answer in _VALID else "notprinter"
