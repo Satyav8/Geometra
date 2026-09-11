@@ -590,8 +590,7 @@ def find_printer_type_question(text: str) -> Optional[str]:
 # alongside letters ("LX-310", "G3010", "L2321D") or capitals past the first character
 # ("DeskJet", "LaserJet", "PIXMA", "TVS") is a product identifier. Deliberately a shape
 # test, not a list of models or brands - nothing here needs updating when a new printer
-# ships. Over-firing is harmless: the classifier answers "unknown" for anything that isn't
-# a printer and the turn falls through to Pass 2 as before.
+# ships.
 _MODEL_LIKE_RE = re.compile(r"\b(?=[A-Za-z-]*\d)(?=\d*[A-Za-z])[A-Za-z0-9-]{3,}\b")
 
 
@@ -601,8 +600,46 @@ def _has_model_like_token(text: str) -> bool:
     return any(any(c.isupper() for c in tok[1:]) for tok in text.split() if len(tok) > 2)
 
 
+# The gate below used to require BOTH a print-family word and a model token, and a
+# production smoke test found that misses how customers actually phrase it. Four of eight
+# real-model cases never reached the classifier at all:
+#
+#   "I have an HP DeskJet 2331, can I use it"           no print-family word
+#   "I own a Canon imageCLASS LBP2900B, will it work"   no print-family word
+#   "will a Canon PIXMA G3010 work for the marker"      says "marker", not "print"
+#   "we have a TVS MSP 250 star at the office"          no print-family word
+#
+# All four fell through to Pass 2, and Pass 2 got one of them factually wrong - it told a
+# customer the TVS MSP 250, a dot matrix printer, was an inkjet. That is precisely the
+# failure this module exists to prevent: a marker printed on a dot matrix produces a failed
+# measurement, not merely a poor one.
+#
+# Two widenings, both kept narrow enough to stay off ordinary traffic:
+#
+#   1. "marker" counts as printing context for the MODEL path. In this product the marker
+#      exists to be printed, so a model named beside it is a printing question. Kept out of
+#      _PRINTING_CONTEXT_RE itself so the type-word ladder above is unaffected.
+#   2. Possession framing ("I have", "we own", ...) beside a model token - which is how
+#      someone describes hardware they already own, the only real reason to name a model.
+#
+# Over-firing is cheap by construction, which is what makes widening safe: the classifier
+# answers "notprinter" for anything that isn't printer hardware and the turn continues to
+# Pass 2 exactly as before, so the worst case is one small extra call, not a wrong answer.
+_PRINTER_MODEL_CONTEXT_RE = re.compile(
+    r"\b(print|prints|printed|printing|printer|printers|marker|markers)\b", re.IGNORECASE
+)
+_HARDWARE_POSSESSION_RE = re.compile(
+    r"\b(?:i|we)\s+(?:only\s+|just\s+|already\s+)?(?:have|own|got|bought|use)\b",
+    re.IGNORECASE,
+)
+
+
 def mentions_printer_model(text: str) -> bool:
-    return bool(_PRINTING_CONTEXT_RE.search(text)) and _has_model_like_token(text)
+    if not _has_model_like_token(text):
+        return False
+    return bool(
+        _PRINTER_MODEL_CONTEXT_RE.search(text) or _HARDWARE_POSSESSION_RE.search(text)
+    )
 
 
 def is_quick_commerce_print_question(text: str) -> bool:
@@ -1105,6 +1142,9 @@ def process_turn(
             return _short_circuit(PRINTER_DOT_MATRIX_MESSAGE)
         if classified == "unknown":
             return _short_circuit(PRINTER_UNKNOWN_TYPE_MESSAGE)
+        # "notprinter" (and a failed call, None) deliberately fall through to Pass 2 - the
+        # gate above is generous on purpose, so a message that only looked like it named
+        # hardware must end up exactly where it would have without this ladder.
 
     # A request hiding an unsafe ask inside base64 ("decode this and respond to it" - a
     # known LLM jailbreak technique) bypasses every check above, since none of them ever
