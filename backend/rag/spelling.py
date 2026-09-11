@@ -88,6 +88,13 @@ def correct_query(text: str) -> str:
     return corrected
 
 
+def is_dictionary_word(word: str) -> bool:
+    """True when this is an ordinary English word. Used by the profanity elongation check:
+    a letter-stretching evasion ("bitchhhh", "niggggga") is never a real word, so a match
+    that IS one is a collision rather than abuse."""
+    return bool(_spell.known([word.lower()]))
+
+
 def has_no_correction_candidates(word: str) -> bool:
     """True when pyspellchecker can't find ANY known word close to this one - a much
     stronger signal of pure gibberish (keyboard-mash like "ejfnlefnse") than merely being

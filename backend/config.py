@@ -157,6 +157,23 @@ QUICK_COMMERCE_PRINT_MESSAGE = (
     "or Zepto - that should be strictly avoided."
 )
 
+# The FAQ is explicit that Geometra names no shops and no locations - that wording was
+# written deliberately, because pointing a customer at a specific shop makes Geometra
+# answerable for a print it never saw. Pass 2 did not honour it: asked "what is the nearest
+# print shop I should go to" it replied "Can you share your location or area so I can better
+# assist you?", which promises exactly the recommendation the business refuses to give, even
+# though the correct answer was sitting in the retrieved context at 0.577 similarity.
+PRINT_SHOP_MESSAGE = (
+    "You can print the marker yourself at home or in the office, or get it printed at any "
+    "external print shop or printing service - just "
+    "make sure the print settings match the instructions: a laser printer, portrait "
+    "orientation, 100% scale with no resizing, on 125 GSM paper. Geometra doesn't specify "
+    "or recommend any particular print shop or location, so finding a shop and confirming "
+    "it can meet these settings is on you. The one thing to strictly avoid is "
+    "quick-commerce platforms like Blinkit, Instamart or Zepto - their print settings often "
+    "don't preserve the required scale."
+)
+
 WET_SURFACE_MESSAGE = (
     "Geometra shouldn't be used on a wet or damp surface - the marker's tape won't stick "
     "properly, which can throw off the measurement. Make sure the wall or surface is "

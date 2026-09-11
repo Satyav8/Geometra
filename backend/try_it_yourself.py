@@ -15,7 +15,7 @@ sys.path.insert(0, ".")
 from rag.retriever import retrieve
 from rag.relevance import is_gratitude, is_greeting, is_query_relevant
 from rag.embedder import embed_text
-from rag.spelling import correct_query, has_no_correction_candidates
+from rag.spelling import correct_query, has_no_correction_candidates, is_dictionary_word
 from llm.client import call_llm
 from llm.moderation import is_flagged_by_moderation
 from llm.printer_classifier import classify_printer_type
@@ -473,6 +473,14 @@ _PROFANITY_WHITELIST = (
     # An actual request for pornography carries far more than the three letters, and is
     # caught semantically by the moderation layer and Pass 2's SAFETY rule.
     "xxx",
+    # "kill" is in the library's default list, which hard-refused "how do I kill the glare
+    # on a glossy wall" - ordinary photography vocabulary, and glare on a glossy wall is a
+    # real FAQ topic. The word is neither a slur nor profanity; it only matters in context,
+    # which is exactly what a fixed wordlist cannot see and what the other two layers can.
+    # Verified before removing it: the moderation API flags "I will kill you", "I am going
+    # to kill your family" and "I want to kill myself, tell me the easiest way", and passes
+    # "how do I kill the glare" and "this feature is a killer".
+    "kill", "kills", "killing", "killer",
 )
 profanity.load_censor_words(whitelist_words=list(_PROFANITY_WHITELIST))
 
@@ -580,6 +588,24 @@ def _joined_word_runs(words, max_window: int = 4):
             yield "".join(lowered[i:i + size])
 
 
+# An elongation pattern accepts any repetition of each letter, so it also matches longer
+# REAL words that happen to spell a censored term out letter by letter. "asses" builds
+# \ba+s+s+e+s+\b, which matches "assess" - so "can you assess my wall photo quality" got a
+# hard safety refusal in production. The plural forms are the dangerous ones: "classes",
+# "possess" and "address" sit in the same family.
+#
+# A stretched-out evasion is never an ordinary English word, so a match that IS one is a
+# collision. Checked against the same dictionary already loaded for typo correction, and
+# only for the elongation check - a genuine slur that happens to be a dictionary word is
+# still caught by the direct word-by-word check above, which runs first.
+def _has_elongated_profanity(text: str) -> bool:
+    for pattern in _ELONGATION_PATTERNS:
+        match = pattern.search(text)
+        if match and not is_dictionary_word(match.group(0)):
+            return True
+    return False
+
+
 def is_severe_slur(text: str) -> bool:
     # Word by word, never joined - see the comment above for why the library's own
     # whole-text call is not used here.
@@ -611,7 +637,7 @@ def is_severe_slur(text: str) -> bool:
         profanity.contains_profanity(w) for w in _WORD_RE.findall(corrected)
     ):
         return True
-    if any(p.search(text) for p in _ELONGATION_PATTERNS):
+    if _has_elongated_profanity(text):
         return True
     return False
 
@@ -967,6 +993,70 @@ def mentions_printer_model(text: str) -> bool:
 # the "avoid quick-commerce platforms" guidance. Same reliability ceiling seen everywhere
 # else in this file: answered deterministically instead of trusting the model here.
 _QUICK_COMMERCE_PATTERN = re.compile(r"\b(zepto|blinkit|instamart)\b", re.IGNORECASE)
+
+# The FAQ is explicit that Geometra names no shops and no locations - that wording was
+# written deliberately, because pointing a customer at a specific shop makes Geometra
+# answerable for a print it never saw. Pass 2 did not honour it: asked "what is the nearest
+# print shop I should go to" it replied "Can you share your location or area so I can better
+# assist you?", which promises exactly the recommendation the business refuses to give, even
+# though the correct answer was sitting in the retrieved context at 0.577 similarity.
+PRINT_SHOP_MESSAGE = (
+    "You can print the marker yourself at home or in the office, or get it printed at any "
+    "external print shop or printing service - just "
+    "make sure the print settings match the instructions: a laser printer, portrait "
+    "orientation, 100% scale with no resizing, on 125 GSM paper. Geometra doesn't specify "
+    "or recommend any particular print shop or location, so finding a shop and confirming "
+    "it can meet these settings is on you. The one thing to strictly avoid is "
+    "quick-commerce platforms like Blinkit, Instamart or Zepto - their print settings often "
+    "don't preserve the required scale."
+)
+
+
+# "What is the nearest print shop I should go to" got "Can you share your location or area
+# so I can better assist you?" in production - an offer to recommend a shop, which is the
+# one thing the FAQ says Geometra never does ("Geometra will not specify or recommend any
+# particular print shop or location in your area"). That exact answer was in the retrieved
+# context at 0.577 similarity and Pass 2 asked for a location anyway, so this is the usual
+# reliability ceiling on a question the business has already answered once, in writing.
+#
+# Requires a printing word AND a shop word AND the customer actually seeking one, so it
+# claims "where should I get it printed" without swallowing "the print shop printed it too
+# small" - a troubleshooting question that still belongs to Pass 2 and the retrieved
+# instructions.
+_PRINT_SHOP_RE = re.compile(
+    r"\b(print|prints|printed|printing|printout|print[\s-]?out|marker)\b", re.IGNORECASE
+)
+_SHOP_WORD_RE = re.compile(
+    r"\b(shops?|stores?|stationer(?:y|ies)|xerox|cyber\s*caf[eé]s?|print(?:ing)?\s*"
+    r"(?:centres?|centers?|services?)|vendors?)\b",
+    re.IGNORECASE,
+)
+_SEEKING_RE = re.compile(
+    r"\b(nearest|near\s*(?:me|by)|nearby|closest|which|where|recommend|recommendation|"
+    r"suggest|suggestion|find|locate|know\s+any|any\s+good|best|should\s+i\s+go|"
+    r"go\s+to|can\s+i\s+(?:go|take|get))\b",
+    re.IGNORECASE,
+)
+
+
+# "Where can I get the marker printed" asks the same thing without ever saying "shop", so a
+# where-question carrying an actual printing VERB counts too. The verb is what keeps this
+# off "where do I place the marker on a wall" - same question word, same product noun,
+# completely different question.
+_WHERE_TO_PRINT_RE = re.compile(
+    r"\bwhere\b.{0,60}\b(print|prints|printed|printing|printout|print[\s-]?out)\b|"
+    r"\b(print|prints|printed|printing|printout)\b.{0,60}\bwhere\b",
+    re.IGNORECASE | re.DOTALL,
+)
+
+
+def is_print_shop_location_question(text: str) -> bool:
+    if not _PRINT_SHOP_RE.search(text):
+        return False
+    if _SHOP_WORD_RE.search(text) and _SEEKING_RE.search(text):
+        return True
+    return bool(_WHERE_TO_PRINT_RE.search(text))
+
 
 QUICK_COMMERCE_PRINT_MESSAGE = (
     "You can get the marker printed at any external shop or service, just make sure the "
@@ -1365,6 +1455,12 @@ def process_turn(query, history, awaiting):
     # trusting Pass 2 to reliably surface the FAQ's direct answer from context.
     if is_quick_commerce_print_question(query):
         return QUICK_COMMERCE_PRINT_MESSAGE, None
+
+    # See is_print_shop_location_question() - the business's position on naming
+    # shops is fixed and already written down, so it is stated rather than
+    # re-derived per turn.
+    if is_print_shop_location_question(query):
+        return PRINT_SHOP_MESSAGE, None
 
     # See is_wet_surface_question() - answered deterministically since Pass 2's own
     # SAFETY judgment was misfiring on this benign topic roughly a quarter of the time.
