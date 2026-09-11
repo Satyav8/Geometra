@@ -15,6 +15,11 @@ DOMAIN_WORDS = {
     "geometra", "aruco", "whatsapp", "dxf", "chromadb", "qdrant",
     "sendgrid", "supabase", "groq", "sam",
     "zepto", "blinkit", "instamart",
+    # Printer brand/series names, for customers who type them in lowercase (the
+    # internal-capitals rule below covers them when typed normally). Printing the marker
+    # is a required step, so these come up constantly.
+    "laserjet", "deskjet", "officejet", "ecotank", "pixma", "imageclass",
+    "smarttank", "inktank", "epson", "canon", "brother", "kyocera", "ricoh",
 }
 
 # Below this length, corrections are more likely to mangle a legitimate short word/
@@ -34,8 +39,27 @@ def correct_query(text: str) -> str:
     doesn't tank the embedding similarity or miss a keyword match. Conservative by
     design: only touches words the checker doesn't recognize, skips short words
     (protects acronyms/codes), and never touches known product/technical terms."""
+    # A token carrying capitals anywhere but the first character is a product identifier,
+    # not a typo - "LaserJet", "EcoTank", "PIXMA", "DeskJet", "imageCLASS". Left alone,
+    # the checker rewrote real printer models into unrelated dictionary words and the LLM
+    # answered about those instead: "HP LaserJet 1020" reached it as "HP Learjet 1020" (a
+    # private jet) and it replied that it couldn't confirm whether a Learjet was a laser
+    # printer; "Epson EcoTank" became "Ecotone", "Canon PIXMA" became "Pima". Same class
+    # of bug as the zepto->kept case above, and unfixable by wordlist alone since no list
+    # can enumerate every printer model a customer might own.
+    #
+    # Skipped only when the message isn't entirely uppercase, so a customer typing in
+    # caps ("HOW DO I MEASRUE A WALL") still gets their genuine typos corrected.
+    shouting = text.isupper()
+    def _is_product_identifier(token: str) -> bool:
+        return not shouting and any(c.isupper() for c in token[1:])
+
     tokens = _TOKEN_RE.findall(text)
-    candidates = {t.lower() for t in tokens if len(t) >= MIN_LENGTH_TO_CORRECT}
+    protected = {t.lower() for t in tokens if _is_product_identifier(t)}
+    candidates = {
+        t.lower() for t in tokens
+        if len(t) >= MIN_LENGTH_TO_CORRECT and t.lower() not in protected
+    }
     if not candidates:
         return text
 
