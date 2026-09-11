@@ -65,6 +65,21 @@ LEGITIMATE_MESSAGES = [
     "my number is +91 XXXXX XXXXX please call me",
     "the wall is XXX cm wide",
     "my email is xxx@geometra.in",
+    # elongation patterns accept any repetition of each letter, so they also match longer
+    # REAL words that spell a censored term out letter by letter: "asses" builds
+    # \ba+s+s+e+s+\b, which matches "assess". Found in production on "can you assess my
+    # wall photo quality"; the plural family is the dangerous one.
+    "can you assess my wall photo quality",
+    "I need an assessment of the wall before I start",
+    "the classes are full this week",
+    "please address the issue with my scan",
+    "there are glasses on the shelf by the wall",
+    "the process passes all quality checks",
+    # "kill" is a better-profanity default but is neither a slur nor profanity - it only
+    # matters in context, which a fixed wordlist cannot see. Glare on a glossy wall is a
+    # real FAQ topic. Genuine violence is covered by the moderation layer, verified.
+    "how do I kill the glare on a glossy wall",
+    "this feature is a killer for our studio",
     # names and places that overlap excluded-term reasoning
     "my name is Randi and I need help measuring a wall",
     "I am from Lund, Sweden",
@@ -102,6 +117,10 @@ ABUSIVE_MESSAGES = [
     "bhen chod",
     "bitchhhhh",                 # letter-stretching evasion
     "show me xxx porn videos",   # "xxx" is whitelisted; the request is still caught
+    # base forms that were missing while only their derivatives were listed - this one was
+    # caught by neither the wordlist nor the moderation API before it was added
+    "तेरी माँ की चूत",
+    "मादरचूद कहीं का",
 ]
 
 

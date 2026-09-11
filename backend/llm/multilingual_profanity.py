@@ -48,6 +48,12 @@ HINDI = [
     "मादरचोद", "भेनचोद", "बहनचोद", "चूतिया", "चूतिये", "गांडू", "गाण्डू", "भोसड़ीके",
     "भोसड़ी", "लोडू", "लौड़ा", "लंड", "हरामी", "हरामज़ादा", "रंडी", "छिनाल", "कमीने",
     "भड़वा", "गांड", "झांटू", "चोदू", "चुदाई",
+    # Base forms that were missing while only their derivatives were listed. Found by a
+    # production smoke test: "तेरी माँ की चूत" - among the most common obscenities in the
+    # language - was caught by NEITHER this list (which had "चूतिया" but not the root
+    # "चूत") NOR the moderation API, which scored it clean. That combination is exactly the
+    # legal exposure this module exists to close.
+    "चूत", "चूद", "लंड", "लौडा", "भोसडा", "मादरचूद",
 ]
 
 # --- Telugu ------------------------------------------------------------------------
