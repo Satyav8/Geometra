@@ -615,7 +615,27 @@ _EXCLUDED_CATEGORIES = (
             r"birds?|flowers?|men|man|women|woman|guys?|dudes?|fellas?|blokes?|chaps?|"
             r"bros?|boys?|girls?|kids?|child|"
             r"children|baby|babies|lady|ladies|gentlemen|gentleman|adults?|"
-            r"teenagers?|toddlers?)\b"
+            r"teenagers?|toddlers?|"
+            # Named species - see llm/two_pass.py. Without these, "can I measure a lion"
+            # reached Pass 2 and came back with the hard SAFETY refusal. Collision-prone
+            # names left out on purpose: bat, crane, seal, mouse, bear, fly, cock.
+            r"lions?|tigers?|leopards?|cheetahs?|jaguars?|panthers?|elephants?|giraffes?|"
+            r"rhinos?|rhinoceros|hippos?|hippopotamus|zebras?|camels?|donkeys?|mules?|"
+            r"horses?|ponies|pony|cows?|buffalo(?:es)?|oxen|bulls?|goats?|sheep|lambs?|"
+            r"pigs?|boars?|deer|foxes|fox|wolves|wolf|hyenas?|bears|monkeys?|apes?|"
+            r"gorillas?|chimpanzees?|rabbits?|hares?|squirrels?|rats?|hamsters?|ferrets?|"
+            r"otters?|beavers?|pandas?|kangaroos?|koalas?|sloths?|raccoons?|skunks?|"
+            r"porcupines?|hedgehogs?|moles?|bison|yaks?|llamas?|alpacas?|"
+            r"parrots?|pigeons?|crows?|sparrows?|eagles?|hawks?|owls?|ducks?|geese|goose|"
+            r"hens?|roosters?|chickens?|peacocks?|swans?|penguins?|ostrich(?:es)?|flamingos?|"
+            r"snakes?|cobras?|pythons?|lizards?|geckos?|chameleons?|crocodiles?|"
+            r"alligators?|turtles?|tortoises?|frogs?|toads?|dolphins?|whales?|sharks?|"
+            r"octopus(?:es)?|jellyfish|"
+            # "crickets?" and "ticks?" deliberately absent - cricket-the-sport and the
+            # checkmark sense collide. See llm/two_pass.py.
+            r"beetles?|ants?|spiders?|cockroach(?:es)?|roach(?:es)?|mosquito(?:es)?|"
+            r"mosquitos?|butterflies|butterfly|moths?|bees?|wasps?|hornets?|worms?|"
+            r"snails?|slugs?|scorpions?|centipedes?|caterpillars?|termites?|fleas?)\b"
             r"(?!['’]?s?[\s-]+(room|rooms|(?:man\s+)?caves?|bedroom|bedrooms|den|office|"
             r"nursery|playroom|bathroom|closet|corner|area|space|suite|zone|wardrobe|cabin))",
             re.IGNORECASE,
@@ -1060,6 +1080,27 @@ def process_turn(query, history, awaiting):
     if is_injection_attempt(query):
         return OUT_OF_SCOPE_MESSAGE, None
 
+    # PRODUCT VERDICTS - answered ahead of the moderation call and deliberately NOT gated
+    # by it, since both require an explicit "measure"/"measuring" in the text and so only
+    # fire on product questions. Gating them on moderation replaced the correct "it's a
+    # weapon or tool" answer with the hard SAFETY refusal for "can i measure a knife".
+    # See llm/two_pass.py for the full reasoning (mirrored per this file's sync convention).
+    if is_solid_representation_question(query):
+        return (
+            "Unfortunately, Geometra isn't able to measure that - mannequins, "
+            "statues, dolls, and stuffed toys fall under representations of a "
+            "living thing, which are outside what Geometra supports. I'd be happy "
+            "to help with anything else in the room you'd like measured!"
+        ), None
+    if awaiting is None:
+        exclusion_reason = find_definite_exclusion_reason(query)
+        if exclusion_reason:
+            return (
+                f"Unfortunately, Geometra isn't able to measure that since "
+                f"{exclusion_reason}. I'd be happy to help with anything else in "
+                "the room you'd like measured!"
+            ), None
+
     # Free, instant regex checks on any base64-decoded payload first - see
     # _decode_base64_payloads() above.
     decoded_payloads = _decode_base64_payloads(query)
@@ -1079,30 +1120,6 @@ def process_turn(query, history, awaiting):
     # llm/two_pass.py for the full reasoning (mirrored per this file's sync convention).
     if decoded_payloads:
         return OUT_OF_SCOPE_MESSAGE, None
-
-    # See is_solid_representation_question() - answered deterministically, not left to
-    # Pass 2, since this specific question kept regressing back to "it's alive" no
-    # matter how the prompt was worded.
-    if is_solid_representation_question(query):
-        return (
-            "Unfortunately, Geometra isn't able to measure that - mannequins, "
-            "statues, dolls, and stuffed toys fall under representations of a "
-            "living thing, which are outside what Geometra supports. I'd be happy "
-            "to help with anything else in the room you'd like measured!"
-        ), None
-
-    # See find_definite_exclusion_reason() - a fresh question about an item explicitly on
-    # Rule 8C's cannot-measure list (a tablet, a tree, a toy...) kept getting a clarifying
-    # question instead of a direct no, even though the item was already named in the
-    # prompt. Answered deterministically instead of adding more prompt text.
-    if awaiting is None:
-        exclusion_reason = find_definite_exclusion_reason(query)
-        if exclusion_reason:
-            return (
-                f"Unfortunately, Geometra isn't able to measure that since "
-                f"{exclusion_reason}. I'd be happy to help with anything else in "
-                "the room you'd like measured!"
-            ), None
 
     # See is_quick_commerce_print_question() - answered deterministically instead of
     # trusting Pass 2 to reliably surface the FAQ's direct answer from context.

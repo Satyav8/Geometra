@@ -305,12 +305,48 @@ _EXCLUDED_CATEGORIES = (
         # option to the lookahead so a possessive immediately before the whole "man cave" idiom
         # is protected too, without loosening the lookahead generally (which would risk new
         # false negatives elsewhere).
+        # The generic words ("animal", "insect", "bird") were here from the start, but no
+        # NAMED species were - so "can I measure a lion" / "a fox" / "a beetle" matched
+        # nothing deterministic, reached Pass 2, and came back with the hard SAFETY refusal
+        # ("I can't help with that. This chat is here for genuine, respectful questions...")
+        # for an entirely ordinary question. Same failure class as the celestial and
+        # historical-name cases: anything no deterministic layer claims is left to Pass 2's
+        # judgment, which over-refuses on unusual-but-harmless input. Named species are
+        # listed here so they get the same calm, correct "it's a living thing" answer that
+        # "dog" and "cat" always did.
+        #
+        # Collision-prone names are deliberately left OUT: "bat" (cricket bat), "crane"
+        # (construction crane), "seal" (to seal a surface), "mouse" (already covered as a
+        # computer peripheral), "bear" ("bear with me"), "fly"/"flies" (the verb), and
+        # "cock" (already whitelisted out of the profanity list).
         re.compile(
             r"\b(trees?|plants?|dogs?|cats?|humans?|persons?|people|animals?|insects?|"
             r"birds?|flowers?|men|man|women|woman|guys?|dudes?|fellas?|blokes?|chaps?|"
             r"bros?|boys?|girls?|kids?|child|"
             r"children|baby|babies|lady|ladies|gentlemen|gentleman|adults?|"
-            r"teenagers?|toddlers?)\b"
+            r"teenagers?|toddlers?|"
+            # mammals
+            r"lions?|tigers?|leopards?|cheetahs?|jaguars?|panthers?|elephants?|giraffes?|"
+            r"rhinos?|rhinoceros|hippos?|hippopotamus|zebras?|camels?|donkeys?|mules?|"
+            r"horses?|ponies|pony|cows?|buffalo(?:es)?|oxen|bulls?|goats?|sheep|lambs?|"
+            r"pigs?|boars?|deer|foxes|fox|wolves|wolf|hyenas?|bears|monkeys?|apes?|"
+            r"gorillas?|chimpanzees?|rabbits?|hares?|squirrels?|rats?|hamsters?|ferrets?|"
+            r"otters?|beavers?|pandas?|kangaroos?|koalas?|sloths?|raccoons?|skunks?|"
+            r"porcupines?|hedgehogs?|moles?|bison|yaks?|llamas?|alpacas?|"
+            # birds
+            r"parrots?|pigeons?|crows?|sparrows?|eagles?|hawks?|owls?|ducks?|geese|goose|"
+            r"hens?|roosters?|chickens?|peacocks?|swans?|penguins?|ostrich(?:es)?|flamingos?|"
+            # reptiles, amphibians, aquatic
+            r"snakes?|cobras?|pythons?|lizards?|geckos?|chameleons?|crocodiles?|"
+            r"alligators?|turtles?|tortoises?|frogs?|toads?|dolphins?|whales?|sharks?|"
+            r"octopus(?:es)?|jellyfish|"
+            # insects and other invertebrates
+            # "crickets?" is deliberately absent: cricket-the-sport is far more likely than
+            # the insect in this market, and it false-positived on "can I measure a cricket
+            # bat". "ticks?" is out for the same reason (the checkmark sense).
+            r"beetles?|ants?|spiders?|cockroach(?:es)?|roach(?:es)?|mosquito(?:es)?|"
+            r"mosquitos?|butterflies|butterfly|moths?|bees?|wasps?|hornets?|worms?|"
+            r"snails?|slugs?|scorpions?|centipedes?|caterpillars?|termites?|fleas?)\b"
             r"(?!['’]?s?[\s-]+(room|rooms|(?:man\s+)?caves?|bedroom|bedrooms|den|office|"
             r"nursery|playroom|bathroom|closet|corner|area|space|suite|zone|wardrobe|cabin))",
             re.IGNORECASE,
@@ -771,25 +807,6 @@ def _deterministic_short_circuit(raw_query: str, awaiting: Optional[str]) -> Opt
     Extracted from process_turn() unchanged - the order of these checks is load-bearing
     (see each one's own comment for why it sits where it does)."""
 
-    # See is_solid_representation_question() - answered deterministically, not left to
-    # Pass 2, since this specific question kept regressing no matter how the prompt was
-    # worded. Checked against raw_query, not the typo-corrected query - see the
-    # is_severe_slur/is_injection_attempt comment above for why: spell-correction can turn
-    # an unusual short phrase into an unrelated real word, which would silently defeat
-    # every check below the same way it did for the slur and greeting cases. All the
-    # deterministic pattern checks in this function follow that same reasoning.
-    if is_solid_representation_question(raw_query):
-        return _short_circuit(MANNEQUIN_EXCLUSION_MESSAGE)
-
-    # See find_definite_exclusion_reason() - a fresh question about an item explicitly on
-    # the cannot-measure list kept getting a clarifying question instead of a direct no,
-    # even when the item was already named in the prompt. Answered deterministically
-    # instead of adding more prompt text.
-    if awaiting is None:
-        exclusion_reason = find_definite_exclusion_reason(raw_query)
-        if exclusion_reason:
-            return _short_circuit(EXCLUDED_ITEM_MESSAGE_TEMPLATE.format(reason=exclusion_reason))
-
     # See is_quick_commerce_print_question() - a customer asking about printing the marker
     # via Zepto/Blinkit/Instamart kept getting an unnecessary clarifying question instead
     # of the FAQ's direct answer, even with the correct chunk sitting right there in
@@ -898,6 +915,29 @@ def process_turn(
     # ticket offer or a clarifying question.
     if is_injection_attempt(raw_query):
         return _short_circuit(OUT_OF_SCOPE_MESSAGE)
+
+    # PRODUCT VERDICTS - answered here, ahead of the moderation call, and deliberately NOT
+    # gated by it. Both of these require an explicit "measure"/"measuring" in the text (see
+    # find_definite_exclusion_reason), so they only ever fire on a product question about
+    # what Geometra can measure.
+    #
+    # Gating them on moderation was actively wrong: "can i measure a knife" and "can i
+    # measure a gun" come back flagged with very weak scores (illicit 0.21 / 0.29 - real
+    # hate and violence score far higher), which replaced the correct, calm "it's a weapon
+    # or tool" answer with the hard SAFETY refusal - "I can't help with that. This chat is
+    # here for genuine, respectful questions..." - for an entirely ordinary question about
+    # a kitchen knife. Merely naming an object is not a safety event.
+    #
+    # This is safe because the "measure" requirement is doing real work: a genuinely
+    # violent message ("I'll stab you with a knife") contains no "measure", matches nothing
+    # here, and goes on to moderation exactly as before. is_severe_slur() has also already
+    # run above, so an abusive message that happens to mention a knife is still blocked.
+    if is_solid_representation_question(raw_query):
+        return _short_circuit(MANNEQUIN_EXCLUSION_MESSAGE)
+    if awaiting is None:
+        exclusion_reason = find_definite_exclusion_reason(raw_query)
+        if exclusion_reason:
+            return _short_circuit(EXCLUDED_ITEM_MESSAGE_TEMPLATE.format(reason=exclusion_reason))
 
     # A request hiding an unsafe ask inside base64 ("decode this and respond to it" - a
     # known LLM jailbreak technique) bypasses every check above, since none of them ever
