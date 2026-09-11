@@ -662,19 +662,24 @@ _EXCLUDED_CATEGORIES = (
         "it's a reflective or transparent surface",
     ),
     (
-        # Rule 8C explicitly lists "celestial bodies" under this same category, but nothing
-        # deterministic caught it - "can I measure a black hole's event horizon" hit a hard
-        # SAFETY refusal instead, since the LLM's own judgment misfired on the bizarre/novel
-        # phrasing rather than reasoning it through as an ordinary Rule 8C exclusion.
-        # Deliberately narrow (no "star," "moon," "sun") - those have common non-astronomical
-        # meanings (a star- or moon-shaped mirror/light fixture is a real measurable object).
         re.compile(
-            r"\b(mountains?|monuments?|towers?|poles?|zoos?|race\s*tracks?|streets?|"
-            r"black\s*holes?|event\s+horizons?|galax(?:y|ies)|nebul(?:a|ae|as)|"
-            r"asteroids?|comets?|supernovae?|supernovas?)\b",
+            r"\b(mountains?|monuments?|towers?|poles?|zoos?|race\s*tracks?|streets?)\b",
             re.IGNORECASE,
         ),
         "it's a standalone outdoor structure, not part of a room or hall",
+    ),
+    (
+        # Celestial bodies get their own reason line - folded into the outdoor-structure
+        # category above they produced "it's a standalone outdoor structure" in reply to
+        # "can I measure a galaxy", which reads as nonsense. See llm/two_pass.py.
+        # Deliberately narrow (no "star," "moon," "sun") - those have common
+        # non-astronomical meanings (a star- or moon-shaped mirror is a real object).
+        re.compile(
+            r"\b(black\s*holes?|event\s+horizons?|galax(?:y|ies)|nebul(?:a|ae|as)|"
+            r"asteroids?|comets?|supernovae?|supernovas?|planets?)\b",
+            re.IGNORECASE,
+        ),
+        "it's a celestial body",
     ),
     (
         re.compile(
