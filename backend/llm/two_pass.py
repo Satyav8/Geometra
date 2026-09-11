@@ -30,6 +30,7 @@ from config import (
     PRINTER_DOT_MATRIX_MESSAGE,
     PRINTER_INKJET_MESSAGE,
     PRINTER_LASER_MESSAGE,
+    PRINTER_UNKNOWN_TYPE_MESSAGE,
     QUICK_COMMERCE_PRINT_MESSAGE,
     SAFETY_REFUSAL_MESSAGE,
     TICKET_DECLINED_MESSAGE,
@@ -40,6 +41,7 @@ from config import (
 from llm.client import call_llm
 from llm.guardrails import check_numerical_hallucination, check_response_length
 from llm.moderation import is_flagged_by_moderation
+from llm.printer_classifier import classify_printer_type
 from llm.multilingual_profanity import (
     ALL_TERMS as MULTILINGUAL_PROFANITY_TERMS,
     contains_native_script_profanity,
@@ -492,6 +494,29 @@ def find_printer_type_question(text: str) -> Optional[str]:
     if len(matched) != 1:
         return None
     return matched[0]
+
+
+# Routes a printer question to the classifier only when it plausibly names a MODEL, so the
+# common "how do I print the marker" (which wants the full retrieved instructions, not a
+# type verdict) still goes to Pass 2 untouched.
+#
+# "Model-like" reuses the same idea as the spell-correction fix: a token carrying digits
+# alongside letters ("LX-310", "G3010", "L2321D") or capitals past the first character
+# ("DeskJet", "LaserJet", "PIXMA", "TVS") is a product identifier. Deliberately a shape
+# test, not a list of models or brands - nothing here needs updating when a new printer
+# ships. Over-firing is harmless: the classifier answers "unknown" for anything that isn't
+# a printer and the turn falls through to Pass 2 as before.
+_MODEL_LIKE_RE = re.compile(r"\b(?=[A-Za-z-]*\d)(?=\d*[A-Za-z])[A-Za-z0-9-]{3,}\b")
+
+
+def _has_model_like_token(text: str) -> bool:
+    if _MODEL_LIKE_RE.search(text):
+        return True
+    return any(any(c.isupper() for c in tok[1:]) for tok in text.split() if len(tok) > 2)
+
+
+def mentions_printer_model(text: str) -> bool:
+    return bool(_PRINTING_CONTEXT_RE.search(text)) and _has_model_like_token(text)
 
 
 def is_quick_commerce_print_question(text: str) -> bool:
@@ -978,6 +1003,22 @@ def process_turn(
             "inkjet": PRINTER_INKJET_MESSAGE,
             "dot_matrix": PRINTER_DOT_MATRIX_MESSAGE,
         }[printer_type])
+
+    # No type word, but a model is named - see llm/printer_classifier.py. One small focused
+    # call (~1.3s, measured 15/15 correct and fully self-consistent) instead of the ~5s
+    # Pass 2 path, which only managed 10/12 on real models and answered "I don't have
+    # specific information" on the other two. A classifier failure returns None and falls
+    # through to Pass 2 exactly as before this existed.
+    if mentions_printer_model(raw_query):
+        classified = classify_printer_type(raw_query)
+        if classified == "laser":
+            return _short_circuit(PRINTER_LASER_MESSAGE)
+        if classified == "inkjet":
+            return _short_circuit(PRINTER_INKJET_MESSAGE)
+        if classified == "dotmatrix":
+            return _short_circuit(PRINTER_DOT_MATRIX_MESSAGE)
+        if classified == "unknown":
+            return _short_circuit(PRINTER_UNKNOWN_TYPE_MESSAGE)
 
     # A request hiding an unsafe ask inside base64 ("decode this and respond to it" - a
     # known LLM jailbreak technique) bypasses every check above, since none of them ever
