@@ -162,6 +162,12 @@ def is_gibberish(text: str) -> bool:
 _PROFANITY_WHITELIST = (
     "damn", "crap", "hell", "god", "ass", "fanny", "dick", "cock",
     "freaking", "frigging", "goddamn",
+    # "xxx" is in the library's list as a porn marker, but for a wall-measurement product
+    # it is overwhelmingly a placeholder: "the wall is XXX cm wide", a masked phone number
+    # (the FAQ's own WhatsApp answer reads "+91 XXXXX XXXXX"), or an example address.
+    # An actual request for pornography carries far more than the three letters, and is
+    # caught semantically by the moderation layer and Pass 2's SAFETY rule.
+    "xxx",
 )
 profanity.load_censor_words(whitelist_words=list(_PROFANITY_WHITELIST))
 
@@ -197,10 +203,15 @@ def _elongation_tolerant_pattern(word: str):
     return re.compile(r"\b" + "".join(re.escape(c) + "+" for c in word) + r"\b", re.IGNORECASE)
 
 
+# Terms made of one repeated character are excluded: the pattern for "xxx" becomes
+# \bx+x+x+\b, which matches any run of three or more x's - so a masked phone number
+# ("+91 XXXXX XXXXX", which appears verbatim in the FAQ's own WhatsApp answer), a
+# placeholder dimension ("the wall is XXX cm wide") or an example email all registered
+# as profanity. Letter-stretching evasion still works for every normal term.
 _ELONGATION_PATTERNS = [
     _elongation_tolerant_pattern(w._original)
     for w in profanity.CENSOR_WORDSET
-    if w._original.isalpha() and len(w._original) >= 3
+    if w._original.isalpha() and len(w._original) >= 3 and len(set(w._original.lower())) > 1
 ]
 
 
@@ -256,14 +267,29 @@ def _build_squash_safe_terms():
 _SQUASH_SAFE_TERMS = _build_squash_safe_terms()
 
 
+def _joined_word_runs(words, max_window: int = 4):
+    """Concatenations of consecutive whole words: "madar chod" -> "madarchod"."""
+    lowered = [w.lower() for w in words]
+    for size in range(2, max_window + 1):
+        for i in range(len(lowered) - size + 1):
+            yield "".join(lowered[i:i + size])
+
+
 def is_severe_slur(text: str) -> bool:
     # Word by word, never joined - see the comment above for why the library's own
     # whole-text call is not used here.
-    if any(profanity.contains_profanity(w) for w in _WORD_RE.findall(text)):
+    words = _WORD_RE.findall(text)
+    if any(profanity.contains_profanity(w) for w in words):
         return True
-    # Spaced-out evasion ("madar chod"), restricted to terms ordinary words can't spell.
-    squashed = "".join(_WORD_RE.findall(text)).lower()
-    if any(t in squashed for t in _SQUASH_SAFE_TERMS):
+    # Spaced-out evasion ("madar chod"). Two guards, and both are load-bearing:
+    #
+    #   - EXACT match against whole-word runs, never a substring of the squashed text.
+    #     Substring matching flagged "place the marker and wall together" as abuse,
+    #     because "markerandwall" happens to contain "randwa" across boundaries that
+    #     align with no actual word. That phrase is close to the most common thing a
+    #     customer of this product can say.
+    #   - restricted to terms ordinary words can't spell, so "so use" != souse.
+    if any(run in _SQUASH_SAFE_TERMS for run in _joined_word_runs(words)):
         return True
     # better-profanity cannot match non-ASCII at all (see llm/multilingual_profanity.py -
     # even an exact-match single Devanagari word registered via add_censor_words() comes

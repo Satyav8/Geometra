@@ -54,6 +54,17 @@ LEGITIMATE_MESSAGES = [
     # "logins" was being corrected to "loins"
     "do we need separate logins for each user",
     "I forgot my login details",
+    # substring collisions across word boundaries that align with no real word:
+    # "marker and wall" squashes to "markerandwall", which contains "randwa".
+    # Close to the most common phrase in this product's vocabulary.
+    "place the marker and wall together",
+    "align the marker and wall edges",
+    "the corner and wall must be visible",
+    "my printer and wall are ready",
+    # placeholder X runs - the FAQ's own WhatsApp answer contains "+91 XXXXX XXXXX"
+    "my number is +91 XXXXX XXXXX please call me",
+    "the wall is XXX cm wide",
+    "my email is xxx@geometra.in",
     # names and places that overlap excluded-term reasoning
     "my name is Randi and I need help measuring a wall",
     "I am from Lund, Sweden",
@@ -89,6 +100,8 @@ ABUSIVE_MESSAGES = [
     "you dipshit",
     "madar chod you idiot",    # spaced-out evasion must still be caught
     "bhen chod",
+    "bitchhhhh",                 # letter-stretching evasion
+    "show me xxx porn videos",   # "xxx" is whitelisted; the request is still caught
 ]
 
 
