@@ -204,8 +204,66 @@ _ELONGATION_PATTERNS = [
 ]
 
 
+# better-profanity strips spaces before matching, to catch spaced-out evasion like
+# "a s s" -> "ass". The unavoidable side effect is that ordinary consecutive words also
+# collapse into censored terms: "so use" -> "souse", "he be" -> "hebe", "an us" -> "anus",
+# "am in a" -> "amina". Measured against natural customer sentences, 11 of 18 were wrongly
+# refused - including "the room is dark so use extra lighting for the photo", where
+# lighting guidance is an actual FAQ topic. These are the library's own default terms, so
+# this has been live since better-profanity was adopted, not something introduced with the
+# multilingual list.
+#
+# The library's MAX_NUMBER_COMBINATIONS cannot switch it off - even at 1 it still appends
+# one more word, so two-word joins survive - so the behaviour is replaced here: words are
+# checked individually (never joined), and spaced-out evasion is handled by a separate
+# check below that only considers terms which CANNOT be built from ordinary English words.
+# Digits and the common substitution characters stay INSIDE the token: better-profanity's
+# own leetspeak mapping ("1" -> "i", "$" -> "s") only works if it sees the whole token, and
+# a letters-only pattern split "b1tch" into "b" + "tch", neither of which is censored.
+_WORD_RE = re.compile(r"[A-Za-z0-9@$!*']+")
+
+
+def _is_decomposable(term: str, vocab) -> bool:
+    """True if term can be formed by concatenating two or three ordinary English words."""
+    n = len(term)
+    for i in range(1, n):
+        if term[:i] in vocab and term[i:] in vocab:
+            return True
+    for i in range(1, n - 1):
+        for j in range(i + 1, n):
+            if term[:i] in vocab and term[i:j] in vocab and term[j:] in vocab:
+                return True
+    return False
+
+
+def _build_squash_safe_terms():
+    """Censored terms safe to match against space-stripped text - i.e. those no sequence of
+    ordinary words can produce. "madarchod" qualifies (so "madar chod" is still caught);
+    "souse", "anus" and "hebe" do not, so "so use", "an us" and "he be" stay clean."""
+    from spellchecker import SpellChecker
+
+    sp = SpellChecker()
+    vocab = {
+        w for w in sp.word_frequency.dictionary
+        if 1 <= len(w) <= 7 and sp.word_frequency[w] > 150_000 and w.isalpha()
+    }
+    return {
+        t for w in profanity.CENSOR_WORDSET
+        if (t := w._original.lower()).isalpha() and len(t) >= 6 and not _is_decomposable(t, vocab)
+    }
+
+
+_SQUASH_SAFE_TERMS = _build_squash_safe_terms()
+
+
 def is_severe_slur(text: str) -> bool:
-    if profanity.contains_profanity(text):
+    # Word by word, never joined - see the comment above for why the library's own
+    # whole-text call is not used here.
+    if any(profanity.contains_profanity(w) for w in _WORD_RE.findall(text)):
+        return True
+    # Spaced-out evasion ("madar chod"), restricted to terms ordinary words can't spell.
+    squashed = "".join(_WORD_RE.findall(text)).lower()
+    if any(t in squashed for t in _SQUASH_SAFE_TERMS):
         return True
     # better-profanity cannot match non-ASCII at all (see llm/multilingual_profanity.py -
     # even an exact-match single Devanagari word registered via add_censor_words() comes
@@ -218,7 +276,9 @@ def is_severe_slur(text: str) -> bool:
     # already figured out what it actually was. Reuses the existing spellchecker instead
     # of hand-rolling fuzzy-matching against a slur list.
     corrected = correct_query(text)
-    if corrected != text and profanity.contains_profanity(corrected):
+    if corrected != text and any(
+        profanity.contains_profanity(w) for w in _WORD_RE.findall(corrected)
+    ):
         return True
     if any(p.search(text) for p in _ELONGATION_PATTERNS):
         return True

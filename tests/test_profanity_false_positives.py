@@ -37,6 +37,23 @@ LEGITIMATE_MESSAGES = [
     "my team in india wants to use geometra",
     "can I measure a kitchen cabinet",
     "does it work in low light conditions",
+    # word pairs that collapse into censored terms once spaces are stripped:
+    # "so use" -> souse, "he be" -> hebe, "he she" -> heshe, "an us" -> anus,
+    # "do of us" -> doofus. All are better-profanity defaults, so these guard the
+    # library's own list as well as ours.
+    "the room is dark so use extra lighting for the photo",
+    "it is quite dim in there so use a brighter lamp",
+    "the light is poor so use the flash off setting",
+    "should he be standing further back from the wall",
+    "is it ok if he be the one uploading the photos",
+    "can he she or they share the same account",
+    "we are an us company using geometra",
+    "there are four of us, do of us need separate logins",
+    "three some of my walls are curved",
+    # spell-correction turning ordinary words into censored ones:
+    # "logins" was being corrected to "loins"
+    "do we need separate logins for each user",
+    "I forgot my login details",
     # names and places that overlap excluded-term reasoning
     "my name is Randi and I need help measuring a wall",
     "I am from Lund, Sweden",
@@ -66,6 +83,12 @@ ABUSIVE_MESSAGES = [
     "आई घाल झवाड्या भडव्या",
     "தேவிடியா புண்டை",
     "orospu cocugu siktir git",
+    "you are a fucking asshole",
+    "you filthy towelhead",
+    "b1tch get lost",          # leetspeak - the token must stay intact to match
+    "you dipshit",
+    "madar chod you idiot",    # spaced-out evasion must still be caught
+    "bhen chod",
 ]
 
 
