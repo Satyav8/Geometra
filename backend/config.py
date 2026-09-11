@@ -193,6 +193,19 @@ PRINTER_DOT_MATRIX_MESSAGE = (
     "printer if you can, in portrait orientation at 100% scale with no resizing."
 )
 
+# Shown when the printer classifier genuinely can't identify a named model. Replaces the
+# dead end Pass 2 used to give ("I don't have specific information about that model"),
+# which left the customer no way forward - they'd likely just print anyway, and on a dot
+# matrix that means a failed measurement. This answers the question they actually have.
+PRINTER_UNKNOWN_TYPE_MESSAGE = (
+    "I'm not certain which type that particular model is, but the type is what matters: a "
+    "laser printer is what we recommend for the Geometra marker, an inkjet will work "
+    "though it isn't ideal, and a dot matrix printer should never be used - it can't "
+    "reproduce the marker sharply enough for the measurement to come out right. The type "
+    "is usually printed on the machine itself or listed in its manual - tell me which one "
+    "it is and I'll confirm."
+)
+
 CURVED_SURFACE_MESSAGE = (
     "Unfortunately, Geometra isn't able to measure that since it's a curved surface - it's "
     "designed specifically for flat, closed, non-curved shapes, regardless of how many "

@@ -18,6 +18,7 @@ from rag.embedder import embed_text
 from rag.spelling import correct_query, has_no_correction_candidates
 from llm.client import call_llm
 from llm.moderation import is_flagged_by_moderation
+from llm.printer_classifier import classify_printer_type
 from llm.multilingual_profanity import (
     ALL_TERMS as MULTILINGUAL_PROFANITY_TERMS,
     contains_native_script_profanity,
@@ -25,6 +26,10 @@ from llm.multilingual_profanity import (
 from llm.prompts import SYSTEM_PROMPT
 from models import SourceChunk
 from config import (
+    PRINTER_DOT_MATRIX_MESSAGE,
+    PRINTER_INKJET_MESSAGE,
+    PRINTER_LASER_MESSAGE,
+    PRINTER_UNKNOWN_TYPE_MESSAGE,
     GRATITUDE_MESSAGE,
     GREETING_MESSAGE,
     OUT_OF_SCOPE_MESSAGE,
@@ -738,6 +743,56 @@ def find_definite_exclusion_reason(text: str) -> str | None:
     return None
 
 
+# Rule 8E's printer policy, made deterministic. "can i use an Epson LX-310 dot matrix
+# printer" hit the hard SAFETY refusal on 4 of 6 identical production attempts - no
+# deterministic layer claimed it and moderation scored it clean (0.008), so this was Pass 2
+# alone, refusing an ordinary question about a required step of using the product.
+#
+# Requires BOTH a printing word and a printer type, so "can i measure a laser cutter" (no
+# printing context) doesn't match. Fires only when exactly one type is named: a comparison
+# ("laser or inkjet?") falls through to Pass 2, which can actually weigh them, and a
+# question naming only a MODEL falls through too, since Rule 8E deliberately lets Pass 2
+# use general knowledge to classify models a regex could never enumerate.
+_PRINTING_CONTEXT_RE = re.compile(r"\b(print|prints|printed|printing|printer|printers)\b", re.IGNORECASE)
+_PRINTER_TYPE_PATTERNS = (
+    (re.compile(r"\b(dot[\s-]*matrix)\b", re.IGNORECASE), "dot_matrix"),
+    (re.compile(r"\b(inkjet|ink[\s-]jet)\b", re.IGNORECASE), "inkjet"),
+    (re.compile(r"\b(laser)\b", re.IGNORECASE), "laser"),
+)
+
+
+def find_printer_type_question(text):
+    if not _PRINTING_CONTEXT_RE.search(text):
+        return None
+    matched = [kind for pattern, kind in _PRINTER_TYPE_PATTERNS if pattern.search(text)]
+    if len(matched) != 1:
+        return None
+    return matched[0]
+
+
+# Routes a printer question to the classifier only when it plausibly names a MODEL, so the
+# common "how do I print the marker" (which wants the full retrieved instructions, not a
+# type verdict) still goes to Pass 2 untouched.
+#
+# "Model-like" reuses the same idea as the spell-correction fix: a token carrying digits
+# alongside letters ("LX-310", "G3010", "L2321D") or capitals past the first character
+# ("DeskJet", "LaserJet", "PIXMA", "TVS") is a product identifier. Deliberately a shape
+# test, not a list of models or brands - nothing here needs updating when a new printer
+# ships. Over-firing is harmless: the classifier answers "unknown" for anything that isn't
+# a printer and the turn falls through to Pass 2 as before.
+_MODEL_LIKE_RE = re.compile(r"\b(?=[A-Za-z-]*\d)(?=\d*[A-Za-z])[A-Za-z0-9-]{3,}\b")
+
+
+def _has_model_like_token(text):
+    if _MODEL_LIKE_RE.search(text):
+        return True
+    return any(any(c.isupper() for c in tok[1:]) for tok in text.split() if len(tok) > 2)
+
+
+def mentions_printer_model(text):
+    return bool(_PRINTING_CONTEXT_RE.search(text)) and _has_model_like_token(text)
+
+
 # A customer asking about printing the marker via Zepto/Blinkit/Instamart kept getting an
 # unnecessary clarifying question instead of the FAQ's direct, unambiguous answer, even
 # with the correct chunk sitting right there in context - Pass 2 wouldn't reliably surface
@@ -1100,6 +1155,23 @@ def process_turn(query, history, awaiting):
                 f"{exclusion_reason}. I'd be happy to help with anything else in "
                 "the room you'd like measured!"
             ), None
+
+    # Rule 8E printer policy - type word first, then the focused classifier for a named
+    # model. See llm/printer_classifier.py (mirrored per this file's sync convention).
+    printer_type = find_printer_type_question(query)
+    if printer_type:
+        return {"laser": PRINTER_LASER_MESSAGE, "inkjet": PRINTER_INKJET_MESSAGE,
+                "dot_matrix": PRINTER_DOT_MATRIX_MESSAGE}[printer_type], None
+    if mentions_printer_model(query):
+        classified = classify_printer_type(query)
+        if classified == "laser":
+            return PRINTER_LASER_MESSAGE, None
+        if classified == "inkjet":
+            return PRINTER_INKJET_MESSAGE, None
+        if classified == "dotmatrix":
+            return PRINTER_DOT_MATRIX_MESSAGE, None
+        if classified == "unknown":
+            return PRINTER_UNKNOWN_TYPE_MESSAGE, None
 
     # Free, instant regex checks on any base64-decoded payload first - see
     # _decode_base64_payloads() above.
