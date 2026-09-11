@@ -120,8 +120,17 @@ URDU = [
 ]
 
 # --- Turkish (Latin script, but measured uncovered) --------------------------------
+# "amina" REMOVED after a production report. better-profanity strips spaces to catch
+# spaced-out evasion ("a s s" -> "ass"), which means any term here can also be formed by
+# running consecutive ordinary words together - and "am in a" collapses to exactly this
+# term. The result was a hard SAFETY refusal for every sentence containing that phrase:
+# "I am in a hotel room, can I measure the wall", "I am in a meeting room and want to
+# measure it", "I am in a hurry". An audit over 35 realistic customer sentences found
+# this was the only term in the whole multilingual list with the problem (6/35 flagged,
+# all of them this one word), but it is the failure mode to check for before adding any
+# short term here. tests/test_profanity_false_positives.py guards it now.
 TURKISH = [
-    "orospu", "orospucocugu", "amcik", "amina", "sikeyim", "siktir", "yarrak",
+    "orospu", "orospucocugu", "amcik", "sikeyim", "siktir", "yarrak",
     "gotveren", "piçkurusu",
 ]
 
