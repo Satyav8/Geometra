@@ -163,6 +163,36 @@ WET_SURFACE_MESSAGE = (
     "completely dry before pasting the marker."
 )
 
+# Rule 8E's printer policy, answered deterministically when the customer names a printer
+# TYPE. Production testing found "can i use an Epson LX-310 dot matrix printer" - an
+# ordinary question about printing the marker - hitting the hard SAFETY refusal on 4 of 6
+# identical attempts, with no deterministic layer covering it and moderation scoring it
+# clean (0.008), so this was purely Pass 2's own judgment misfiring. Printing the marker is
+# a required step to use the product at all, which makes this one of the most consequential
+# questions a customer can ask, so it no longer depends on the model's mood.
+#
+# Only fires when exactly ONE type is named - a comparison ("laser or inkjet?") still goes
+# to Pass 2, which can weigh them. A question naming only a MODEL still goes to Pass 2 too,
+# since Rule 8E deliberately lets it use general knowledge to classify unknown models.
+PRINTER_LASER_MESSAGE = (
+    "Yes, a laser printer is exactly what's recommended for printing the Geometra marker. "
+    "Just keep the page in portrait orientation and print at 100% scale with no resizing, "
+    "so the marker comes out at its exact intended size."
+)
+
+PRINTER_INKJET_MESSAGE = (
+    "An inkjet printer will work as long as it's well maintained, but it isn't the "
+    "recommended option - a laser printer gives a cleaner, higher-contrast marker. If you "
+    "do use the inkjet, switch it to greyscale/monochrome, keep the page in portrait "
+    "orientation, and print at 100% scale with no resizing."
+)
+
+PRINTER_DOT_MATRIX_MESSAGE = (
+    "A dot matrix printer should never be used for the Geometra marker - it can't reproduce "
+    "the marker's pattern sharply enough for the measurement to work. Please use a laser "
+    "printer if you can, in portrait orientation at 100% scale with no resizing."
+)
+
 CURVED_SURFACE_MESSAGE = (
     "Unfortunately, Geometra isn't able to measure that since it's a curved surface - it's "
     "designed specifically for flat, closed, non-curved shapes, regardless of how many "

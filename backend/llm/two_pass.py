@@ -27,6 +27,9 @@ from config import (
     GREETING_MESSAGE,
     MANNEQUIN_EXCLUSION_MESSAGE,
     OUT_OF_SCOPE_MESSAGE,
+    PRINTER_DOT_MATRIX_MESSAGE,
+    PRINTER_INKJET_MESSAGE,
+    PRINTER_LASER_MESSAGE,
     QUICK_COMMERCE_PRINT_MESSAGE,
     SAFETY_REFUSAL_MESSAGE,
     TICKET_DECLINED_MESSAGE,
@@ -462,6 +465,33 @@ def find_definite_exclusion_reason(text: str) -> Optional[str]:
 # everywhere else in this file: answered deterministically instead of trusting the model to
 # apply Rule 1B correctly for this specific, well-defined case.
 _QUICK_COMMERCE_PATTERN = re.compile(r"\b(zepto|blinkit|instamart)\b", re.IGNORECASE)
+
+
+# Rule 8E's printer policy, made deterministic. "can i use an Epson LX-310 dot matrix
+# printer" hit the hard SAFETY refusal on 4 of 6 identical production attempts - no
+# deterministic layer claimed it and moderation scored it clean (0.008), so this was Pass 2
+# alone, refusing an ordinary question about a required step of using the product.
+#
+# Requires BOTH a printing word and a printer type, so "can i measure a laser cutter" (no
+# printing context) doesn't match. Fires only when exactly one type is named: a comparison
+# ("laser or inkjet?") falls through to Pass 2, which can actually weigh them, and a
+# question naming only a MODEL falls through too, since Rule 8E deliberately lets Pass 2
+# use general knowledge to classify models a regex could never enumerate.
+_PRINTING_CONTEXT_RE = re.compile(r"\b(print|prints|printed|printing|printer|printers)\b", re.IGNORECASE)
+_PRINTER_TYPE_PATTERNS = (
+    (re.compile(r"\b(dot[\s-]*matrix)\b", re.IGNORECASE), "dot_matrix"),
+    (re.compile(r"\b(inkjet|ink[\s-]jet)\b", re.IGNORECASE), "inkjet"),
+    (re.compile(r"\b(laser)\b", re.IGNORECASE), "laser"),
+)
+
+
+def find_printer_type_question(text: str) -> Optional[str]:
+    if not _PRINTING_CONTEXT_RE.search(text):
+        return None
+    matched = [kind for pattern, kind in _PRINTER_TYPE_PATTERNS if pattern.search(text)]
+    if len(matched) != 1:
+        return None
+    return matched[0]
 
 
 def is_quick_commerce_print_question(text: str) -> bool:
@@ -938,6 +968,16 @@ def process_turn(
         exclusion_reason = find_definite_exclusion_reason(raw_query)
         if exclusion_reason:
             return _short_circuit(EXCLUDED_ITEM_MESSAGE_TEMPLATE.format(reason=exclusion_reason))
+
+    # See find_printer_type_question() - printing the marker is a required step to use
+    # Geometra at all, and Pass 2 was refusing ordinary printer questions outright.
+    printer_type = find_printer_type_question(raw_query)
+    if printer_type:
+        return _short_circuit({
+            "laser": PRINTER_LASER_MESSAGE,
+            "inkjet": PRINTER_INKJET_MESSAGE,
+            "dot_matrix": PRINTER_DOT_MATRIX_MESSAGE,
+        }[printer_type])
 
     # A request hiding an unsafe ask inside base64 ("decode this and respond to it" - a
     # known LLM jailbreak technique) bypasses every check above, since none of them ever
