@@ -736,6 +736,27 @@ def mentions_printer_model(text: str) -> bool:
     )
 
 
+# Separates "I can't tell what you're asking" from "you asked something specific and got a
+# clarifying question anyway". A message is genuinely vague when it leans on a referent
+# instead of naming a subject ("can I measure it", "what about this one") or is too short
+# to carry one at all. Anything longer, or anything that names its subject, is concrete -
+# and a concrete question that draws a clarifying question is the bug this gates.
+#
+# Measured on both populations, 19/19: the eight real clarify cases from production and
+# eleven concrete questions that were wrongly clarified.
+_VAGUE_REFERENT_RE = re.compile(
+    r"\b(it|this|that|these|those|thing|things|stuff|one|them)\b", re.IGNORECASE
+)
+_WORDS_RE = re.compile(r"[A-Za-z']+")
+
+
+def is_genuinely_vague(text: str) -> bool:
+    words = _WORDS_RE.findall(text)
+    if len(words) <= 2:
+        return True
+    return len(words) <= 6 and bool(_VAGUE_REFERENT_RE.search(text))
+
+
 def is_quick_commerce_print_question(text: str) -> bool:
     return bool(_QUICK_COMMERCE_PATTERN.search(text))
 
@@ -943,6 +964,7 @@ def answer_pass(
     hedge_retry: bool = False,
     already_clarified: bool = False,
     cap_retry: bool = False,
+    answer_now_retry: bool = False,
 ):
     # No raw conversation history here, by design - Pass 2 relies on Pass 1's distilled
     # intent summary instead of raw history.
@@ -989,9 +1011,23 @@ def answer_pass(
         # appropriate instruction for that exact retry.
         if already_clarified and not cap_retry else ""
     )
+    # Deliberately worded as "you already have enough", not "don't clarify". Telling the
+    # model what to do instead of what to avoid is what made cap_retry_note work, and this
+    # is the same instruction aimed at the first turn rather than the capped one.
+    answer_now_note = (
+        "\nNOTE: your previous attempt asked a clarifying question, but the customer's "
+        "message already names what they're asking about, so you have enough to answer. "
+        "Answer it now: take the most reasonable reading of their message, and respond "
+        "directly from the CONTEXT below and the measurement-scope rules. If more than "
+        "one reading is plausible, answer the most likely one and briefly cover the other "
+        "in the same reply - that is still far more useful than asking. Only keep the "
+        "clarifying question if their message genuinely does not say what they are asking "
+        "about at all.\n" if answer_now_retry else ""
+    )
     user_message = build_two_pass_answer_message(
         original_query, intent, chunks, confidence,
-        retry_note=retry_note, clarify_cap_note=clarify_cap_note, cap_retry_note=cap_retry_note,
+        retry_note=retry_note + answer_now_note, clarify_cap_note=clarify_cap_note,
+        cap_retry_note=cap_retry_note,
     )
     response, input_tokens, output_tokens = call_llm(TWO_PASS_ANSWER_PROMPT, user_message)
     return response, input_tokens, output_tokens
@@ -1473,6 +1509,30 @@ def process_turn(
         return _pass2_result(SAFETY_REFUSAL_MESSAGE, None, show_sources=False)
 
     is_clarify_shaped = stripped.startswith("[CLARIFY]") or looks_like_clarify_question(stripped)
+
+    # Measured on a 135-case production battery: 12% of answers came back as a clarifying
+    # question on questions the FAQ answers outright - "can you teach me how to take a
+    # picture", "the room is dark so use extra lighting right", "should he be standing
+    # further back from the wall". Rule 2 already ends with "clarifying a question you
+    # could already answer is worse than just answering it", so this is not a missing
+    # instruction; it is the same 22k-prompt dilution seen everywhere else in this file.
+    #
+    # Retrieval confidence cannot gate this - measured, the two populations overlap almost
+    # exactly ("can I measure it" 0.475 vs "can you teach me how to take a picture" 0.483).
+    # What separates them is whether the customer named a subject at all, which is cheap to
+    # test directly. A concrete question that drew a clarifying question gets one retry
+    # with the blunt instruction that already works for the clarification cap.
+    if is_clarify_shaped and not already_clarified and not is_genuinely_vague(raw_query):
+        response, r_in_tok, r_out_tok = answer_pass(
+            reformulated_query, intent, chunks, confidence, answer_now_retry=True
+        )
+        total_in += r_in_tok
+        total_out += r_out_tok
+        stripped = response.strip()
+        # If it asks again even after that, the question really was ambiguous - the
+        # clarifying question stands and the normal one-round cap takes over next turn.
+        is_clarify_shaped = stripped.startswith("[CLARIFY]") or looks_like_clarify_question(stripped)
+
     if is_clarify_shaped and already_clarified:
         # The cap note alone didn't reliably stop a second clarifying round - the model
         # sometimes asked again anyway, tag or no tag. Give it one more chance with a
