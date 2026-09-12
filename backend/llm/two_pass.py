@@ -42,6 +42,7 @@ from config import (
 from llm.client import call_llm
 from llm.guardrails import check_numerical_hallucination, check_response_length
 from llm.moderation import is_flagged_by_moderation
+from llm.measurability import classify_measurability, reason_for
 from llm.printer_classifier import classify_printer_type
 from llm.multilingual_profanity import (
     ALL_TERMS as MULTILINGUAL_PROFANITY_TERMS,
@@ -518,7 +519,16 @@ _EXCLUDED_CATEGORIES = (
             r"luggage|bags?|backpacks?|rucksacks?|knapsacks?|"
             r"garbage|dustbins?|(trash|waste)\s*(can|bin|basket)s?|wastebaskets?|"
             r"globes?|curtains?|paintbrush(es)?|torches?|needles?|remotes?|"
-            r"keyboards?|mouse|umbrellas?)\b",
+            r"keyboards?|mouse|umbrellas?|"
+            # Rule 8C names "food" explicitly, but no food word was ever here, so every
+            # food question fell to Pass 2 - which refused "I want to measure lasagna" and
+            # "can I measure biryani" as ABUSE, and asked "what type of food?" for the bare
+            # word. Specific dishes are the measurability classifier's job (they're
+            # open-ended and a regex can never hold them); these are the fixed generic
+            # terms, which the classifier reads as naming no specific thing and answers
+            # "unclear" - so they belong here, where the answer is already known.
+            r"foods?(?!\s*(court|hall|truck|stall))|meals?|snacks?|desserts?|"
+            r"breakfasts?|lunch(es)?|dinners?|beverages?)\b",
             re.IGNORECASE,
         ),
         "it's a small handheld or loose item",
@@ -591,6 +601,29 @@ _SUBMARINE_OPERATIONAL_RE = re.compile(
 _BENEFICIARY_PHRASE_RE = re.compile(
     r"\bfor\s+(?:my|our|his|her|their|its)\s+[\w'’-]+", re.IGNORECASE
 )
+
+
+# The measurability classifier (llm/measurability.py) must not fire on the questions
+# customers actually ask most - "how much to measure a wall", "can I measure my living room
+# ceiling". Those name something Rule 8 explicitly covers as measurable, so they're claimed
+# here for free instead of paying for a call to be told what we already know.
+#
+# This is the mirror image of _EXCLUDED_CATEGORIES, and it is consulted AFTER it, never
+# before: "can I measure my dog next to the wall" contains "wall", but the dog decides the
+# answer. Exclusions win, always.
+_IN_SCOPE_RE = re.compile(
+    r"\b(walls?|wall\s*elevations?|elevations?|ceilings?|floors?|rooms?|halls?|"
+    r"doors?|doorways?|windows?|wardrobes?|almirahs?|cabinets?|cupboards?|shelves|shelf|"
+    r"countertops?|counter\s*tops?|slabs?|washbasins?|wash\s*basins?|basins?|sinks?|"
+    r"staircases?|stairs?|steps?|partitions?|panell?ings?|facades?|"
+    r"kitchens?|bathrooms?|bedrooms?|balconies|balcony|lobb(?:y|ies)|corridors?|"
+    r"outlets?|sockets?|switch\s*boards?|photo\s*frames?|surfaces?)\b",
+    re.IGNORECASE,
+)
+
+
+def is_known_measurable(text: str) -> bool:
+    return bool(_IN_SCOPE_RE.search(text))
 
 
 def find_definite_exclusion_reason(text: str) -> Optional[str]:
@@ -1050,6 +1083,36 @@ def _moderation_flagged(future) -> bool:
         return False
 
 
+# A question is for the measurability classifier only when it asks whether something can be
+# measured AND neither deterministic cache already knows the answer. Both halves matter:
+# without the first it would fire on pricing and printing questions; without the second it
+# would pay for a call on "how much to measure a wall", which is most of the traffic.
+_MEASURE_INTENT_RE = re.compile(r"\b(measure|measuring|measurement|scan|scanning)\b", re.IGNORECASE)
+
+
+def _is_measurability_question(text: str) -> bool:
+    if not _MEASURE_INTENT_RE.search(text):
+        return False
+    if find_definite_exclusion_reason(text) or is_solid_representation_question(text):
+        return False          # an exclusion regex already has the answer
+    return not is_known_measurable(text)
+
+
+# Same bound as moderation: this is one short call, and a hung one must never hold up a
+# reply. On timeout the turn continues to Pass 2, exactly as it did before this existed.
+def _measurability_verdict(future) -> Optional[str]:
+    if future is None:
+        return None
+    try:
+        verdict = future.result(timeout=_MODERATION_JOIN_TIMEOUT)
+    except Exception as e:
+        print(f"[measurability] join failed, continuing to Pass 2: {e}")
+        return None
+    if verdict in (None, "measurable", "unclear"):
+        return None
+    return verdict
+
+
 # The fast-path scope gate is an English-only heuristic on both halves: it needs either a
 # hit in the English FAQ_KEYWORDS list or embedding similarity against an all-English
 # knowledge base. Measured against real customer-style questions, that produces noise
@@ -1306,6 +1369,15 @@ def process_turn(
             return _short_circuit(SAFETY_REFUSAL_MESSAGE)
         return deterministic
 
+    # See llm/measurability.py. Started HERE, after the deterministic caches have had their
+    # chance, so it costs nothing on a question they already claim - and before Pass 1 and
+    # retrieval, so its ~1.3s runs alongside their ~5s instead of after it. A "cannot
+    # measure" verdict then REPLACES Pass 2 rather than preceding it, so the path this
+    # claims ends up faster than it is today, not slower.
+    measurability = None
+    if _is_measurability_question(raw_query):
+        measurability = _MODERATION_POOL.submit(classify_measurability, raw_query)
+
     # Pass 1 — Understand. Its entire job is resolving pronouns and references against
     # recent history ("and a commode too?" -> "can Geometra measure a commode?"), so on
     # the FIRST message of a session there is nothing for it to resolve: it just restates
@@ -1329,6 +1401,16 @@ def process_turn(
     # been checked.
     if _moderation_flagged(moderation):
         return _short_circuit(SAFETY_REFUSAL_MESSAGE)
+
+    # Joined after moderation, so an abusive message still gets the safety refusal rather
+    # than a scope answer, and before Pass 2, which this replaces when it has a verdict.
+    verdict = _measurability_verdict(measurability)
+    if verdict == "effigy":
+        return _short_circuit(MANNEQUIN_EXCLUSION_MESSAGE)
+    if verdict:
+        mapped = reason_for(verdict)
+        if mapped and mapped[0]:
+            return _short_circuit(EXCLUDED_ITEM_MESSAGE_TEMPLATE.format(reason=mapped[0]))
 
     top1 = chunks[0].similarity_score if chunks else 0.0
     keyword_hit = is_query_relevant(query)

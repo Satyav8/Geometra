@@ -18,6 +18,7 @@ from rag.embedder import embed_text
 from rag.spelling import correct_query, has_no_correction_candidates, is_dictionary_word
 from llm.client import call_llm
 from llm.moderation import is_flagged_by_moderation
+from llm.measurability import classify_measurability, reason_for
 from llm.printer_classifier import classify_printer_type
 from llm.multilingual_profanity import (
     ALL_TERMS as MULTILINGUAL_PROFANITY_TERMS,
@@ -816,7 +817,16 @@ _EXCLUDED_CATEGORIES = (
             r"luggage|bags?|backpacks?|rucksacks?|knapsacks?|"
             r"garbage|dustbins?|(trash|waste)\s*(can|bin|basket)s?|wastebaskets?|"
             r"globes?|curtains?|paintbrush(es)?|torches?|needles?|remotes?|"
-            r"keyboards?|mouse|umbrellas?)\b",
+            r"keyboards?|mouse|umbrellas?|"
+            # Rule 8C names "food" explicitly, but no food word was ever here, so every
+            # food question fell to Pass 2 - which refused "I want to measure lasagna" and
+            # "can I measure biryani" as ABUSE, and asked "what type of food?" for the bare
+            # word. Specific dishes are the measurability classifier's job (they're
+            # open-ended and a regex can never hold them); these are the fixed generic
+            # terms, which the classifier reads as naming no specific thing and answers
+            # "unclear" - so they belong here, where the answer is already known.
+            r"foods?(?!\s*(court|hall|truck|stall))|meals?|snacks?|desserts?|"
+            r"breakfasts?|lunch(es)?|dinners?|beverages?)\b",
             re.IGNORECASE,
         ),
         "it's a small handheld or loose item",
@@ -884,6 +894,29 @@ _SUBMARINE_OPERATIONAL_RE = re.compile(
 _BENEFICIARY_PHRASE_RE = re.compile(
     r"\bfor\s+(?:my|our|his|her|their|its)\s+[\w'’-]+", re.IGNORECASE
 )
+
+
+# The measurability classifier (llm/measurability.py) must not fire on the questions
+# customers actually ask most - "how much to measure a wall", "can I measure my living room
+# ceiling". Those name something Rule 8 explicitly covers as measurable, so they're claimed
+# here for free instead of paying for a call to be told what we already know.
+#
+# This is the mirror image of _EXCLUDED_CATEGORIES, and it is consulted AFTER it, never
+# before: "can I measure my dog next to the wall" contains "wall", but the dog decides the
+# answer. Exclusions win, always.
+_IN_SCOPE_RE = re.compile(
+    r"\b(walls?|wall\s*elevations?|elevations?|ceilings?|floors?|rooms?|halls?|"
+    r"doors?|doorways?|windows?|wardrobes?|almirahs?|cabinets?|cupboards?|shelves|shelf|"
+    r"countertops?|counter\s*tops?|slabs?|washbasins?|wash\s*basins?|basins?|sinks?|"
+    r"staircases?|stairs?|steps?|partitions?|panell?ings?|facades?|"
+    r"kitchens?|bathrooms?|bedrooms?|balconies|balcony|lobb(?:y|ies)|corridors?|"
+    r"outlets?|sockets?|switch\s*boards?|photo\s*frames?|surfaces?)\b",
+    re.IGNORECASE,
+)
+
+
+def is_known_measurable(text: str) -> bool:
+    return bool(_IN_SCOPE_RE.search(text))
 
 
 def find_definite_exclusion_reason(text: str) -> str | None:
@@ -1377,6 +1410,21 @@ def _is_non_latin_script(text):
     return sum(1 for c in letters if ord(c) > 0x24F) / len(letters) >= 0.5
 
 
+# A question is for the measurability classifier only when it asks whether something can be
+# measured AND neither deterministic cache already knows the answer. Both halves matter:
+# without the first it would fire on pricing and printing questions; without the second it
+# would pay for a call on "how much to measure a wall", which is most of the traffic.
+_MEASURE_INTENT_RE = re.compile(r"\b(measure|measuring|measurement|scan|scanning)\b", re.IGNORECASE)
+
+
+def _is_measurability_question(text: str) -> bool:
+    if not _MEASURE_INTENT_RE.search(text):
+        return False
+    if find_definite_exclusion_reason(text) or is_solid_representation_question(text):
+        return False          # an exclusion regex already has the answer
+    return not is_known_measurable(text)
+
+
 def process_turn(query, history, awaiting):
     """Returns (response_text, new_awaiting_state)."""
     TICKET_RAISED_MESSAGE = "[TEST] Ticket would be raised here — last 3 turns emailed via Resend."
@@ -1544,6 +1592,18 @@ def process_turn(query, history, awaiting):
     # answer about washbasins got no context and produced an unrelated guess. Pass 1 is
     # a cheap, short-output call, so always including the last couple of turns costs
     # very little and closes that gap.
+    # See llm/measurability.py. Called inline here rather than concurrently -
+    # this harness is for reading behaviour, not for timing; the real pipeline
+    # in llm/two_pass.py overlaps it with Pass 1 and retrieval.
+    if _is_measurability_question(query):
+        verdict = classify_measurability(query)
+        if verdict == "effigy":
+            return MANNEQUIN_EXCLUSION_MESSAGE, None
+        if verdict not in (None, "measurable", "unclear"):
+            mapped = reason_for(verdict)
+            if mapped and mapped[0]:
+                return EXCLUDED_ITEM_MESSAGE_TEMPLATE.format(reason=mapped[0]), None
+
     reformulated_query, intent = understand(query, history)
 
     # Fast-path scope check: ONE retrieve() call, reused for both the gate and Pass 2.
