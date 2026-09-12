@@ -1099,6 +1099,27 @@ QUICK_COMMERCE_PRINT_MESSAGE = (
 )
 
 
+# Separates "I can't tell what you're asking" from "you asked something specific and got a
+# clarifying question anyway". A message is genuinely vague when it leans on a referent
+# instead of naming a subject ("can I measure it", "what about this one") or is too short
+# to carry one at all. Anything longer, or anything that names its subject, is concrete -
+# and a concrete question that draws a clarifying question is the bug this gates.
+#
+# Measured on both populations, 19/19: the eight real clarify cases from production and
+# eleven concrete questions that were wrongly clarified.
+_VAGUE_REFERENT_RE = re.compile(
+    r"\b(it|this|that|these|those|thing|things|stuff|one|them)\b", re.IGNORECASE
+)
+_WORDS_RE = re.compile(r"[A-Za-z']+")
+
+
+def is_genuinely_vague(text: str) -> bool:
+    words = _WORDS_RE.findall(text)
+    if len(words) <= 2:
+        return True
+    return len(words) <= 6 and bool(_VAGUE_REFERENT_RE.search(text))
+
+
 def is_quick_commerce_print_question(text: str) -> bool:
     return bool(_QUICK_COMMERCE_PATTERN.search(text))
 
@@ -1261,7 +1282,7 @@ def understand(query, history):
     return reformulated, intent
 
 
-def answer_pass(original_query, intent, chunks, confidence, hedge_retry=False, already_clarified=False, cap_retry=False):
+def answer_pass(original_query, intent, chunks, confidence, hedge_retry=False, already_clarified=False, cap_retry=False, answer_now_retry=False):
     # No raw conversation history here, by design - the diagram only feeds history into
     # Pass 1. Pass 2 relies on Pass 1's distilled intent summary instead, so this
     # actually tests whether Pass 1's reformulation carries enough context on its own.
@@ -1310,8 +1331,21 @@ def answer_pass(original_query, intent, chunks, confidence, hedge_retry=False, a
         # the more specific, appropriate instruction for that exact retry.
         if already_clarified and not cap_retry else ""
     )
+    # Deliberately worded as "you already have enough", not "don't clarify". Telling the
+    # model what to do instead of what to avoid is what made cap_retry_note work, and this
+    # is the same instruction aimed at the first turn rather than the capped one.
+    answer_now_note = (
+        "\nNOTE: your previous attempt asked a clarifying question, but the customer's "
+        "message already names what they're asking about, so you have enough to answer. "
+        "Answer it now: take the most reasonable reading of their message, and respond "
+        "directly from the CONTEXT below and the measurement-scope rules. If more than "
+        "one reading is plausible, answer the most likely one and briefly cover the other "
+        "in the same reply - that is still far more useful than asking. Only keep the "
+        "clarifying question if their message genuinely does not say what they are asking "
+        "about at all.\n" if answer_now_retry else ""
+    )
     user_message = (
-        f"{prefix}Customer's likely intent: {intent}\n{retry_note}{clarify_cap_note}"
+        f"{prefix}Customer's likely intent: {intent}\n{retry_note}{answer_now_note}{clarify_cap_note}"
         f"{cap_retry_note}\nCONTEXT:\n{context}\n\nCUSTOMER QUESTION: {original_query}"
     )
     response, _, _ = call_llm(ANSWER_PROMPT, user_message)
@@ -1638,6 +1672,17 @@ def process_turn(query, history, awaiting):
         # attempt isn't safe to assume is fine to show.
         return SAFETY_REFUSAL_MESSAGE, None
     is_clarify_shaped = stripped.startswith("[CLARIFY]") or looks_like_clarify_question(stripped)
+
+    # See is_genuinely_vague() - 12% of production answers came back as a clarifying
+    # question on things the FAQ answers outright. A question that names its subject gets
+    # one retry with the blunt instruction that already works for the clarification cap.
+    if is_clarify_shaped and not already_clarified and not is_genuinely_vague(query):
+        response = answer_pass(
+            reformulated_query, intent, chunks, confidence, answer_now_retry=True
+        )
+        stripped = response.strip()
+        is_clarify_shaped = stripped.startswith("[CLARIFY]") or looks_like_clarify_question(stripped)
+
     if is_clarify_shaped and already_clarified:
         # Manual testing found the cap note alone didn't reliably stop a second
         # clarifying round - the model sometimes asked again anyway, tag or no tag. Give
