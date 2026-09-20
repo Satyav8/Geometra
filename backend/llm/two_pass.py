@@ -1101,9 +1101,25 @@ def _short_circuit(
 
 # Moderation runs concurrently with Pass 1 and retrieval rather than blocking in front of
 # them - it's an independent network call that nothing downstream feeds, so the ~2-4s it
-# takes in practice was pure dead time added to every turn. Small fixed pool: this is one
-# short call per request, never a fan-out.
-_MODERATION_POOL = ThreadPoolExecutor(max_workers=4, thread_name_prefix="moderation")
+# takes in practice was pure dead time added to every turn.
+#
+# Sized to the request concurrency, not to "this is one small call". /chat is a sync def,
+# so Starlette runs it in anyio's thread pool - 40 requests can be in flight at once. At
+# the original 4 workers that was a 10x mismatch, and the consequence was not just
+# slowness: a queued moderation call that doesn't return within _MODERATION_JOIN_TIMEOUT
+# is abandoned and the turn proceeds WITHOUT it. So under load the abuse check silently
+# stopped running, exactly when the most people were talking to the bot, with nothing
+# surfacing that it had happened.
+#
+# Raising the ceiling is close to free: ThreadPoolExecutor creates threads lazily, on
+# demand, so a 40-worker pool holds zero threads at rest and only as many as there is
+# concurrent work (verified: 0 at creation, 3 after 3 submits, 25 after 25). At current
+# traffic this behaves identically to 4; it only changes what happens once more than four
+# people are mid-conversation at the same moment.
+#
+# This pool also carries the measurability classifier (see _is_measurability_question),
+# which made the old ceiling tighter still - two different calls competing for 4 slots.
+_MODERATION_POOL = ThreadPoolExecutor(max_workers=40, thread_name_prefix="moderation")
 
 # Slightly above llm/moderation.py's own 4s client timeout, so a hung call is bounded even
 # if the client's timeout somehow doesn't fire. Fails open on timeout, exactly like the
