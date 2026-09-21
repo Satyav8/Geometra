@@ -6,6 +6,11 @@ from dotenv import load_dotenv
 # on this machine) - otherwise dotenv silently keeps the shell's value instead.
 load_dotenv(override=True)
 
+# "production" turns on the stricter startup assertions in startup_checks.py - that the
+# backends are the durable, shared ones rather than the local-development defaults. Left
+# unset on a laptop and in CI, so neither is affected.
+APP_ENV = os.getenv("APP_ENV", "development")
+
 # LLM
 LLM_PROVIDER = os.getenv("LLM_PROVIDER", "groq")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")

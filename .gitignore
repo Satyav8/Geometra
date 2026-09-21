@@ -1,4 +1,9 @@
 .env
+# Anything .env-shaped. The bare ".env" pattern does NOT cover ".env.original-backup" or
+# ".env.production" - a backup copy made during a credential swap sat untracked and fully
+# committable, holding four live secrets.
+.env*
+!.env.example
 __pycache__/
 *.pyc
 venv/
