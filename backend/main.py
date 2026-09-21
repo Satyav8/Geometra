@@ -4,11 +4,12 @@ from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 
-from config import CORS_ORIGINS, DATABASE_BACKEND, VECTOR_DB_BACKEND
+from config import APP_ENV, CORS_ORIGINS, DATABASE_BACKEND, VECTOR_DB_BACKEND
 from database import init_db, check_health
 from rag import vectorstore
 from rate_limiter import limiter
 from routers import chat, session, unknown
+from startup_checks import validate_configuration
 
 app = FastAPI(title="Geometra Pre-Prototype Chatbot")
 
@@ -34,6 +35,13 @@ app.include_router(unknown.router)
 
 @app.on_event("startup")
 def startup():
+    # Before anything else, and deliberately fatal. See startup_checks.py: every
+    # *_BACKEND in config.py defaults to the local-development choice, so a container
+    # that loses its environment starts cleanly, reports healthy, and writes every
+    # conversation to a SQLite file that dies with the container. Raising here stops
+    # uvicorn from serving at all, which turns a silent data-loss bug into an obvious
+    # failed deploy.
+    validate_configuration(APP_ENV)
     init_db()
 
 

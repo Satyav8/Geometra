@@ -1,0 +1,34 @@
+# Build context = backend/. Everything here either bloats the image, breaks it, or is a
+# secret. The venv is the big one: it is several hundred MB of Windows-built packages that
+# would be useless in a Linux container and would shadow the ones pip installs.
+venv/
+.venv/
+__pycache__/
+**/__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Secrets never go in an image. They arrive as environment variables at run time.
+.env
+.env.*
+!.env.example
+
+# Local-only databases. Production uses Supabase and Qdrant; shipping these would mean
+# baking stale conversation data into the image.
+*.db
+*.sqlite
+*.sqlite3
+data/chroma_db/
+
+# Dev-only harness (Testing branch only) and docs
+try_it_yourself.py
+*.pdf
+*.md
+
+# Test and tooling artefacts
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
