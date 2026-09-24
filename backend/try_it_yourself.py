@@ -1120,6 +1120,69 @@ def is_genuinely_vague(text: str) -> bool:
     return len(words) <= 6 and bool(_VAGUE_REFERENT_RE.search(text))
 
 
+# Rule 2C already says a ticket request with no problem described must get a clarifying
+# question - we cannot raise a ticket without knowing what it would be about. Pass 2 did
+# not honour it: "i want to raise a ticket" came back as "you can reach out by emailing
+# contact@geometra.in", answered from a website chunk that merely looks relevant, and the
+# behaviour varied by phrasing ("raise a ticket" clarified correctly on the same build).
+# Shaped like a Rule 2 clarification, with the two numbered questions, so the one-round cap
+# engages on the next turn exactly as it would have.
+TICKET_NEEDS_DETAIL_MESSAGE = (
+    "Happy to get that raised for you - I just need to know what it's about first. "
+    "1) What issue or question would you like the team to look into? "
+    "2) Have you already tried anything for it, so I can pass that along too?"
+)
+
+
+# Rule 2C: a ticket mentioned with no problem described must get a clarifying question,
+# because we do not know what the ticket would be about. Pass 2 applied it inconsistently -
+# measured against production on one build:
+#
+#   "raise a ticket"                    clarified        correct
+#   "i want to raise a ticket"          answered with contact@geometra.in
+#   "I want to raise a ticket can i ?"  answered with contact@geometra.in
+#
+# Same intent, three phrasings, two different behaviours. The FAQ contains chunks that
+# LOOK like answers here ("how can I reach out to geometra team", "turnaround time if I
+# raise a support request"), so Rule 1's answer-from-context pull beats Rule 2C's
+# instruction - the usual 22k-prompt dilution.
+#
+# Only the BARE request is claimed. A request that names a topic ("raise a ticket about the
+# refund policy") still goes to Pass 2, which should answer the actual question - that is
+# what Rule 2C asks for, and it was already behaving correctly on those.
+_TICKET_REQUEST_RE = re.compile(
+    r"\b(raise|create|open|log|file|submit|register|need|want|get)\b[^.?!]{0,20}?"
+    r"\b(support\s+)?(tickets?|complaints?|cases?)\b",
+    re.IGNORECASE,
+)
+
+# Words that carry no topic of their own. What survives after removing the ticket phrase
+# and these is the customer's actual subject - if nothing survives, there is no subject.
+_TICKET_FILLER = {
+    "i", "id", "we", "you", "me", "my", "our", "your", "it", "its",
+    "a", "an", "the", "this", "that", "there", "here",
+    "want", "wanted", "need", "needed", "like", "would", "could", "can", "may", "shall",
+    "please", "pls", "plz", "kindly", "help", "helping", "do", "does", "did", "is", "are",
+    "am", "be", "to", "for", "of", "on", "in", "with", "and", "or", "so", "now", "then",
+    "up", "raise", "raising", "raised", "create", "creating", "created",
+    "open", "opening", "opened", "log", "logging", "logged",
+    "file", "filing", "filed", "submit", "submitting", "submitted",
+    "register", "registering", "registered",
+    "get", "getting", "got", "make", "making", "made", "put",
+    "ticket", "tickets", "support", "complaint", "complaints", "case", "cases",
+    "hi", "hello", "hey", "thanks", "thank", "ok", "okay", "yes", "no", "regarding",
+    "about", "how", "what", "where", "when", "why", "who", "one", "some", "any", "new",
+}
+
+
+def is_bare_ticket_request(text: str) -> bool:
+    """True for "i want to raise a ticket", False for "raise a ticket about refunds"."""
+    if not _TICKET_REQUEST_RE.search(text):
+        return False
+    remaining = [w for w in _WORDS_RE.findall(text.lower()) if w not in _TICKET_FILLER]
+    return not remaining
+
+
 def is_quick_commerce_print_question(text: str) -> bool:
     return bool(_QUICK_COMMERCE_PATTERN.search(text))
 
@@ -1546,6 +1609,13 @@ def process_turn(query, history, awaiting):
 
     # See is_wet_surface_question() - answered deterministically since Pass 2's own
     # SAFETY judgment was misfiring on this benign topic roughly a quarter of the time.
+    # See is_bare_ticket_request() - Rule 2C's own instruction, applied here
+    # because Pass 2 applied it inconsistently and sometimes answered with the
+    # support email instead. Guarded on awaiting so it cannot hijack a flow
+    # already in progress.
+    if awaiting is None and is_bare_ticket_request(query):
+        return TICKET_NEEDS_DETAIL_MESSAGE, "clarification"
+
     if is_wet_surface_question(query):
         return WET_SURFACE_MESSAGE, None
 

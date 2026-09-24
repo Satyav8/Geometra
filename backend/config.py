@@ -179,6 +179,19 @@ PRINT_SHOP_MESSAGE = (
     "don't preserve the required scale."
 )
 
+# Rule 2C already says a ticket request with no problem described must get a clarifying
+# question - we cannot raise a ticket without knowing what it would be about. Pass 2 did
+# not honour it: "i want to raise a ticket" came back as "you can reach out by emailing
+# contact@geometra.in", answered from a website chunk that merely looks relevant, and the
+# behaviour varied by phrasing ("raise a ticket" clarified correctly on the same build).
+# Shaped like a Rule 2 clarification, with the two numbered questions, so the one-round cap
+# engages on the next turn exactly as it would have.
+TICKET_NEEDS_DETAIL_MESSAGE = (
+    "Happy to get that raised for you - I just need to know what it's about first. "
+    "1) What issue or question would you like the team to look into? "
+    "2) Have you already tried anything for it, so I can pass that along too?"
+)
+
 WET_SURFACE_MESSAGE = (
     "Geometra shouldn't be used on a wet or damp surface - the marker's tape won't stick "
     "properly, which can throw off the measurement. Make sure the wall or surface is "
