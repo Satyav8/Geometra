@@ -61,7 +61,19 @@ QDRANT_URL = os.getenv("QDRANT_URL", "")
 QDRANT_API_KEY = os.getenv("QDRANT_API_KEY", "")
 QDRANT_COLLECTION = os.getenv("QDRANT_COLLECTION", "geometra_faq")
 
-# FAQ knowledge base — live Google Sheet is the source of truth (team keeps adding rows)
+# FAQ knowledge base. "file" (default since 2026-09-29) reads data/faq_current.csv, which
+# is committed to the repo; "sheet" restores fetching a Google Sheet at runtime.
+#
+# The default changed because the sheet was being re-fetched by every ingestion run, so
+# anyone running scripts/ingest_faq.py silently replaced the loaded content with that
+# sheet's current state - which twice reverted a deliberate update within minutes, with
+# nothing to show it had happened. A repo file is versioned and cannot move underneath a
+# running system. The trade-off: updating the FAQ now means editing that CSV, not a
+# spreadsheet.
+FAQ_SOURCE = os.getenv("FAQ_SOURCE", "file")
+FAQ_FILE_PATH = os.getenv("FAQ_FILE_PATH", os.path.join(os.path.dirname(__file__), "data", "faq_current.csv"))
+
+# Google Sheet settings, used only when FAQ_SOURCE=sheet
 FAQ_SHEET_ID = os.getenv("FAQ_SHEET_ID", "1dkd0Qj-6kTc72eXk0UCGFi47RrEP0fiKRAK-jPrFMtA")
 FAQ_SHEET_GID = os.getenv("FAQ_SHEET_GID", "1861055441")
 FAQ_SHEET_CSV_URL = (
