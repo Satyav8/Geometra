@@ -569,9 +569,16 @@ _EXCLUDED_CATEGORIES = (
         # Pass 2 looking for a justification - it produced "they are typically not closed
         # shapes with four or more sides", which is invented reasoning, not a stated rule.
         # Claimed here so the answer is a plain no with a plain reason, every time.
+        # "steps?" was here and had to come out. In this product "steps" overwhelmingly
+        # means INSTRUCTIONS, not stairs - "what are the steps to measure a wall", "step
+        # by step", "help with the steps to do that". Since this category only fires when
+        # the message also contains "measure", that is precisely the phrasing customers
+        # use when asking how to measure something, and all six variants tested were
+        # refused as staircases. A genuine "can I measure the steps" now reaches the
+        # measurability classifier, which has its own stairs verdict.
         re.compile(
-            r"\b(stair\s*cases?|staircases?|stairs?|stairway?s?|stair\s*wells?|"
-            r"steps?|flight\s+of\s+stairs)\b",
+            r"\b(stair\s*cases?|staircases?|stairs?|stairways?|stair\s*wells?|"
+            r"flight\s+of\s+stairs)\b",
             re.IGNORECASE,
         ),
         "a staircase isn't one flat, closed surface - Geometra measures flat surfaces "
