@@ -564,6 +564,20 @@ _EXCLUDED_CATEGORIES = (
         "it's a celestial body",
     ),
     (
+        # Staircases are not measurable (confirmed by the business, 29-09-2026). They used
+        # to sit in the in-scope cache as measurable, and the FAQ row saying otherwise sent
+        # Pass 2 looking for a justification - it produced "they are typically not closed
+        # shapes with four or more sides", which is invented reasoning, not a stated rule.
+        # Claimed here so the answer is a plain no with a plain reason, every time.
+        re.compile(
+            r"\b(stair\s*cases?|staircases?|stairs?|stairway?s?|stair\s*wells?|"
+            r"steps?|flight\s+of\s+stairs)\b",
+            re.IGNORECASE,
+        ),
+        "a staircase isn't one flat, closed surface - Geometra measures flat surfaces "
+        "like walls, doors and cabinets",
+    ),
+    (
         re.compile(
             r"\b(knives?|knife|swords?|guns?|pistols?|rifles?|daggers?|screwdrivers?|"
             r"hammers?|wrenches?|blades?)\b",
@@ -616,7 +630,7 @@ _IN_SCOPE_RE = re.compile(
     r"\b(walls?|wall\s*elevations?|elevations?|ceilings?|floors?|rooms?|halls?|"
     r"doors?|doorways?|windows?|wardrobes?|almirahs?|cabinets?|cupboards?|shelves|shelf|"
     r"countertops?|counter\s*tops?|slabs?|washbasins?|wash\s*basins?|basins?|sinks?|"
-    r"staircases?|stairs?|steps?|partitions?|panell?ings?|facades?|"
+    r"partitions?|panell?ings?|facades?|"
     r"kitchens?|bathrooms?|bedrooms?|balconies|balcony|lobb(?:y|ies)|corridors?|"
     r"outlets?|sockets?|switch\s*boards?|photo\s*frames?|surfaces?)\b",
     re.IGNORECASE,

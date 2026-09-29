@@ -100,7 +100,7 @@ BOT_NAME = "S.A.M"
 BOT_FULL_NAME = "S.A.M (Simple Answering Machine)"
 
 # Fixed numeric constants referenced by the system prompt / guardrails
-ALLOWED_PRICE_NUMBERS = {399, 3, 99}
+ALLOWED_PRICE_NUMBERS = {199, 3, 99}
 
 # The email itself is delivered as a clickable button by the frontend (see support_email
 # field on ChatResponse) — kept out of this text so it isn't duplicated as plain text too.

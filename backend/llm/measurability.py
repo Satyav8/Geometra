@@ -54,7 +54,7 @@ CLASSIFIER_PROMPT = """You decide whether a product called Geometra can measure 
 
 Geometra measures physical surfaces and objects from phone photos: walls, wall elevations,
 ceilings, floors, rooms, halls, doors, windows, wardrobes, cabinets, cupboards, shelves,
-countertops, washbasins, staircases, furniture, electrical outlets/sockets, and photo
+countertops, washbasins, furniture, electrical outlets/sockets, and photo
 frames. It needs a flat, closed, non-curved shape.
 
 It CANNOT measure:
@@ -78,6 +78,7 @@ It CANNOT measure:
                  poles, streets, buildings seen from outside
   celestial    - celestial bodies: planets, stars, moons, galaxies, black holes
   weapon       - weapons: knives, swords, guns, and hand tools like hammers, screwdrivers
+  stairs       - a staircase, stairs or steps - not one flat closed surface
   curved       - a curved or rounded surface, whatever it is made of
 
 Reply with EXACTLY one lowercase word and nothing else:
@@ -103,6 +104,8 @@ CATEGORY_REASONS = {
     "outdoor": "it's a standalone outdoor structure, not part of a room or hall",
     "celestial": "it's a celestial body",
     "weapon": "it's a weapon or tool",
+    "stairs": "a staircase isn't one flat, closed surface - Geometra measures flat "
+              "surfaces like walls, doors and cabinets",
     "curved": "it's a curved surface - Geometra is designed for flat, closed, "
               "non-curved shapes",
 }
