@@ -51,6 +51,25 @@ INSTRUCTIONS = [
 ]
 
 
+# A staircase WALL is an ordinary measurable wall, and "the wall next to the staircase" is
+# one of the most natural ways to describe one. Both were refused, because the category
+# fires on the word appearing anywhere rather than on it being the subject. When a surface
+# Rule 8 covers is also named, the regex defers to the measurability classifier.
+WALL_BESIDE_STAIRS = [
+    "can I measure the wall next to the staircase",
+    "can I measure a staircase wall",
+    "can I measure the wall along the stairway",
+    "can I measure the ceiling above the stairs",
+]
+
+
+@pytest.mark.parametrize("message", WALL_BESIDE_STAIRS)
+def test_a_wall_beside_stairs_is_not_refused_as_a_staircase(message):
+    assert find_definite_exclusion_reason(message) is None, (
+        f"an ordinary wall was refused because stairs were mentioned: {message!r}"
+    )
+
+
 @pytest.mark.parametrize("message", INSTRUCTIONS)
 def test_steps_meaning_instructions_is_not_a_staircase(message):
     assert find_definite_exclusion_reason(message) is None, (

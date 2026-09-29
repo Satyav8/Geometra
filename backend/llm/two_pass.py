@@ -386,6 +386,11 @@ def is_solid_representation_question(text: str) -> bool:
 # the same reason - short and precise beats more prompt text. Gated to fresh questions
 # (awaiting is None) so it can't misfire mid-conversation on an unrelated mention (e.g.
 # "measuring on my tablet" during troubleshooting).
+_STAIRCASE_REASON = (
+    "a staircase isn't one flat, closed surface - Geometra measures flat surfaces "
+    "like walls, doors and cabinets"
+)
+
 _EXCLUDED_CATEGORIES = (
     (
         re.compile(
@@ -581,8 +586,7 @@ _EXCLUDED_CATEGORIES = (
             r"flight\s+of\s+stairs)\b",
             re.IGNORECASE,
         ),
-        "a staircase isn't one flat, closed surface - Geometra measures flat surfaces "
-        "like walls, doors and cabinets",
+        _STAIRCASE_REASON,
     ),
     (
         re.compile(
@@ -657,6 +661,16 @@ def find_definite_exclusion_reason(text: str) -> Optional[str]:
     scanned = _BENEFICIARY_PHRASE_RE.sub(" ", lowered)
     for pattern, reason in _EXCLUDED_CATEGORIES:
         if pattern.search(scanned):
+            # A staircase WALL is an ordinary measurable wall, and "the wall next to the
+            # staircase" is one of the most natural ways to describe one. Both were being
+            # refused, because this category fires on the word appearing anywhere rather
+            # than on it being the subject. When the message also names a surface Rule 8
+            # covers, the subject is genuinely ambiguous and a regex cannot resolve it -
+            # so it defers to the measurability classifier, which reads the whole sentence
+            # and was measured getting all five phrasings right, including keeping "the
+            # stairs in my hallway" excluded.
+            if reason is _STAIRCASE_REASON and is_known_measurable(text):
+                return None
             return reason
     return None
 
