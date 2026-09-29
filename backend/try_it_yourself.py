@@ -700,6 +700,11 @@ def is_solid_representation_question(text: str) -> bool:
 # the same reason - short and precise beats more prompt text. Gated to fresh questions
 # (awaiting is None) so it can't misfire mid-conversation on an unrelated mention (e.g.
 # "measuring on my tablet" during troubleshooting).
+_STAIRCASE_REASON = (
+    "a staircase isn't one flat, closed surface - Geometra measures flat surfaces "
+    "like walls, doors and cabinets"
+)
+
 _EXCLUDED_CATEGORIES = (
     (
         re.compile(
@@ -869,8 +874,7 @@ _EXCLUDED_CATEGORIES = (
             r"flight\s+of\s+stairs)\b",
             re.IGNORECASE,
         ),
-        "a staircase isn't one flat, closed surface - Geometra measures flat surfaces "
-        "like walls, doors and cabinets",
+        _STAIRCASE_REASON,
     ),
     (
         re.compile(
@@ -945,6 +949,9 @@ def find_definite_exclusion_reason(text: str) -> str | None:
     scanned = _BENEFICIARY_PHRASE_RE.sub(" ", lowered)
     for pattern, reason in _EXCLUDED_CATEGORIES:
         if pattern.search(scanned):
+            # A staircase WALL is an ordinary measurable wall - see llm/two_pass.py.
+            if reason is _STAIRCASE_REASON and is_known_measurable(text):
+                return None
             return reason
     return None
 
