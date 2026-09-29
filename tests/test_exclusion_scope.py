@@ -21,16 +21,17 @@ import pytest
 
 from llm.two_pass import find_definite_exclusion_reason
 
+# These name ONLY a person - no measurable surface - so the regex decides outright.
+# Phrasings that also name a wall or room now defer to the classifier instead; see
+# test_measurability_routing.py for why.
 MUST_EXCLUDE = [
     # the case found in production
-    ("can I measure my friend standing by the wall", "living thing"),
     ("can I measure my friend", "living thing"),
     # other ways a customer names a person in the room
     ("can I measure my brother", "living thing"),
     ("can I measure my wife", "living thing"),
     ("can I measure my neighbour", "living thing"),
     ("can I measure my colleague", "living thing"),
-    ("can I measure a guest in the room", "living thing"),
     ("can I measure my mom", "living thing"),
     # the categories that already worked, re-checked so the new words didn't disturb them
     ("can I measure a person", "living thing"),

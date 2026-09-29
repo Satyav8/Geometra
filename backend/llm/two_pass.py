@@ -661,15 +661,25 @@ def find_definite_exclusion_reason(text: str) -> Optional[str]:
     scanned = _BENEFICIARY_PHRASE_RE.sub(" ", lowered)
     for pattern, reason in _EXCLUDED_CATEGORIES:
         if pattern.search(scanned):
-            # A staircase WALL is an ordinary measurable wall, and "the wall next to the
-            # staircase" is one of the most natural ways to describe one. Both were being
-            # refused, because this category fires on the word appearing anywhere rather
-            # than on it being the subject. When the message also names a surface Rule 8
-            # covers, the subject is genuinely ambiguous and a regex cannot resolve it -
-            # so it defers to the measurability classifier, which reads the whole sentence
-            # and was measured getting all five phrasings right, including keeping "the
-            # stairs in my hallway" excluded.
-            if reason is _STAIRCASE_REASON and is_known_measurable(text):
+            # These categories fire when an excluded word appears ANYWHERE, not when it is
+            # the thing being measured. That is fine for "can I measure my dog", and wrong
+            # for every sentence where the excluded thing is scenery:
+            #
+            #   "two vases blocking the corners of the wall, can I measure the wall"
+            #   "can I measure the wall next to the staircase"
+            #   "there is a mirror on the wall, can I still measure the wall"
+            #
+            # All three were refused. All three are about a wall. Whether the excluded word
+            # is the subject or the surroundings is a question about sentence structure,
+            # which a regex cannot answer - so when the message ALSO names a surface Rule 8
+            # covers, it defers to the measurability classifier, which reads the whole
+            # sentence.
+            #
+            # Measured on the ambiguous set: vases-blocking-wall and mirror-on-wall come
+            # back measurable, while "my dog next to the wall" stays living and "a knife
+            # lying on the table" stays a weapon. So exclusions still win where they
+            # should; they just stop winning by accident.
+            if is_known_measurable(text):
                 return None
             return reason
     return None
@@ -1227,11 +1237,36 @@ def _moderation_flagged(future) -> bool:
 _MEASURE_INTENT_RE = re.compile(r"\b(measure|measuring|measurement|scan|scanning)\b", re.IGNORECASE)
 
 
+def _names_excluded_thing(text: str) -> bool:
+    """Whether any exclusion pattern matches at all, ignoring whether it gets to decide.
+
+    find_definite_exclusion_reason() returns None when a message names both an excluded
+    thing and a measurable surface, because it cannot tell which is the subject. That
+    "None" means "I am deferring", not "nothing here" - and the classifier has to be told
+    the difference, or a deferred message falls past the in-scope cache to Pass 2 with
+    nothing having decided it.
+    """
+    lowered = _BENEFICIARY_PHRASE_RE.sub(" ", text.lower())
+    return any(pattern.search(lowered) for pattern, _ in _EXCLUDED_CATEGORIES)
+
+
 def _is_measurability_question(text: str) -> bool:
     if not _MEASURE_INTENT_RE.search(text):
         return False
+    # A question about the MARKER or about printing is not a "can I measure X" question,
+    # even though it says "measurement". Asked "I took two A5 markers printed on one A4
+    # sheet, is it fine for a measurement", the classifier answered "handheld" and the
+    # customer was told Geometra cannot measure that - a refusal to a question about the
+    # product's own required setup step. Those belong to Pass 2 and Rule 8E.
+    if _PRINTER_MODEL_CONTEXT_RE.search(text):
+        return False
     if find_definite_exclusion_reason(text) or is_solid_representation_question(text):
         return False          # an exclusion regex already has the answer
+    # A message naming BOTH an excluded thing and a measurable surface is exactly the case
+    # the regex deferred on, so it must reach the classifier even though the in-scope cache
+    # matches - otherwise nothing decides it at all.
+    if _names_excluded_thing(text):
+        return True
     return not is_known_measurable(text)
 
 
