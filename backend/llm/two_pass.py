@@ -59,6 +59,7 @@ from models import SourceChunk
 from rag.relevance import is_gratitude, is_greeting, is_query_relevant
 from rag.retriever import retrieve_combined
 from rag.spelling import correct_query, has_no_correction_candidates, is_dictionary_word
+from llm.translation import is_non_latin_script, localize, needs_translation, to_english
 
 
 class TurnResult(NamedTuple):
@@ -74,6 +75,10 @@ class TurnResult(NamedTuple):
     output_tokens: int
     raise_ticket_now: bool             # True only when the customer just confirmed "yes"
     skip_check_in: bool                # True unless this is a genuine substantive answer
+    # True when this reply is a fixed English string from this module rather than text an
+    # LLM wrote. Only these need rendering into the customer's language on a non-English
+    # turn - anything Pass 2 produced is already in it. See process_turn().
+    canned: bool = False
 
 
 HEDGE_WORDS = ["i think", "i believe", "probably", "i'm not sure", "it seems", "perhaps", "i suppose"]
@@ -1191,6 +1196,7 @@ def _short_circuit(
         output_tokens=0,
         raise_ticket_now=raise_ticket_now,
         skip_check_in=True,
+        canned=True,
     )
 
 
@@ -1310,15 +1316,9 @@ def _measurability_verdict(future) -> Optional[str]:
 # Threshold 0x24F is the end of Latin Extended-B, so accented Latin (é, ñ, ü, ş) still
 # counts as Latin - only genuinely different scripts (Devanagari, Telugu, Tamil, Bengali,
 # Gurmukhi, Kannada, Malayalam, Arabic, Cyrillic, CJK, Thai) trip this.
-def _is_non_latin_script(text: str) -> bool:
-    letters = [c for c in text if c.isalpha()]
-    if not letters:
-        return False
-    non_latin = sum(1 for c in letters if ord(c) > 0x24F)
-    return non_latin / len(letters) >= 0.5
 
 
-def _deterministic_short_circuit(raw_query: str, awaiting: Optional[str]) -> Optional[TurnResult]:
+def _deterministic_short_circuit(probe: str, awaiting: Optional[str]) -> Optional[TurnResult]:
     """Every business-logic check that can answer a turn with no LLM call at all. Pure
     regex/wordlist matching, microseconds to run, so the whole block is cheap enough to
     evaluate before joining the concurrent moderation check. Returns None when nothing
@@ -1331,12 +1331,12 @@ def _deterministic_short_circuit(raw_query: str, awaiting: Optional[str]) -> Opt
     # via Zepto/Blinkit/Instamart kept getting an unnecessary clarifying question instead
     # of the FAQ's direct answer, even with the correct chunk sitting right there in
     # context. Answered deterministically instead of trusting Pass 2 to reliably apply it.
-    if is_quick_commerce_print_question(raw_query):
+    if is_quick_commerce_print_question(probe):
         return _short_circuit(QUICK_COMMERCE_PRINT_MESSAGE)
 
     # See is_print_shop_location_question() - the business's position on naming shops is
     # fixed and already written down, so it is stated rather than re-derived per turn.
-    if is_print_shop_location_question(raw_query):
+    if is_print_shop_location_question(probe):
         return _short_circuit(PRINT_SHOP_MESSAGE)
 
     # See is_bare_ticket_request() - Rule 2C's own instruction, applied here because Pass 2
@@ -1344,21 +1344,21 @@ def _deterministic_short_circuit(raw_query: str, awaiting: Optional[str]) -> Opt
     # Guarded on awaiting is None so it can never hijack a flow already in progress: a
     # customer replying "yes" to a ticket offer, or answering a clarifying question, must
     # reach their existing handler, not this one.
-    if awaiting is None and is_bare_ticket_request(raw_query):
+    if awaiting is None and is_bare_ticket_request(probe):
         return _short_circuit(TICKET_NEEDS_DETAIL_MESSAGE, new_awaiting="clarification")
 
     # See is_wet_surface_question() - answered deterministically since Pass 2's own
     # SAFETY judgment was misfiring on this benign topic roughly a quarter of the time.
-    if is_wet_surface_question(raw_query):
+    if is_wet_surface_question(probe):
         return _short_circuit(WET_SURFACE_MESSAGE)
 
     # See is_curved_surface_question() - answered deterministically since "rounded" wasn't
     # reliably generalized to the same rule "curved" already triggers correctly.
-    if awaiting is None and is_curved_surface_question(raw_query):
+    if awaiting is None and is_curved_surface_question(probe):
         return _short_circuit(CURVED_SURFACE_MESSAGE)
 
     # See is_angular_arch_question() - the positive-case counterpart to the check above.
-    if awaiting is None and is_angular_arch_question(raw_query):
+    if awaiting is None and is_angular_arch_question(probe):
         return _short_circuit(ANGULAR_ARCH_MESSAGE)
 
     # A genuine troubleshooting attempt was already given last turn - checked here, in
@@ -1366,27 +1366,27 @@ def _deterministic_short_circuit(raw_query: str, awaiting: Optional[str]) -> Opt
     # escalate now. This decides deterministically: an explicit ticket mention, a signal
     # the fix didn't work, or a bare "no" all mean "escalate," anything else means the
     # customer is moving on and this turn is treated like a fresh question.
-    if awaiting == "troubleshoot_given" and wants_escalation_now(raw_query):
+    if awaiting == "troubleshoot_given" and wants_escalation_now(probe):
         return _short_circuit(TICKET_ESCALATION_MESSAGE, new_awaiting="ticket_confirmation")
 
     # Same idea, one turn earlier: right after the one allowed clarifying round, if the
     # customer signals whatever they already tried failed, escalate now rather than
     # letting Pass 2 give a "solve attempt" that just re-suggests the same thing that
     # already didn't work.
-    if awaiting == "clarification" and signals_already_tried(raw_query):
+    if awaiting == "clarification" and signals_already_tried(probe):
         return _short_circuit(TICKET_ESCALATION_MESSAGE, new_awaiting="ticket_confirmation")
 
     # Checked before is_gratitude - is_gratitude() matches on "contains the word thanks
     # anywhere", so "no thanks" (a decline) would otherwise be misread as gratitude. An
     # unambiguous bare-negation phrase (exact match) takes priority.
-    if awaiting == "ticket_confirmation" and is_bare_negation(raw_query):
+    if awaiting == "ticket_confirmation" and is_bare_negation(probe):
         return _short_circuit(TICKET_DECLINED_MESSAGE, clear_pending=True)
-    if awaiting != "ticket_confirmation" and is_bare_negation(raw_query):
+    if awaiting != "ticket_confirmation" and is_bare_negation(probe):
         return _short_circuit(CLARIFY_DECLINE_PROMPT_MESSAGE)
 
-    if is_gratitude(raw_query):
+    if is_gratitude(probe):
         return _short_circuit(GRATITUDE_MESSAGE)
-    if is_greeting(raw_query):
+    if is_greeting(probe):
         return _short_circuit(GREETING_MESSAGE)
 
     # Only a live "yes" to a ticket offer the bot JUST made raises one immediately. Every
@@ -1394,17 +1394,17 @@ def _deterministic_short_circuit(raw_query: str, awaiting: Optional[str]) -> Opt
     # the bot tries to understand and solve the actual problem first - a ticket only
     # happens via [CANNOT_ANSWER] if it genuinely can't help, same as any other
     # unanswerable question.
-    if awaiting == "ticket_confirmation" and is_affirmative(raw_query):
+    if awaiting == "ticket_confirmation" and is_affirmative(probe):
         return _short_circuit("", raise_ticket_now=True, clear_pending=True)
     # anything else: clear awaiting, fall through and treat this message as a new question
 
-    if is_filler(raw_query):
+    if is_filler(probe):
         return _short_circuit(FILLER_RESPONSE_MESSAGE)
 
     # is_gibberish asks "did spell-correction find nothing for this text" - checking the
     # already-corrected query would be near-tautological (if a correction existed, query
     # already reflects it), so this needs the raw text same as the other checks above.
-    if is_gibberish(raw_query):
+    if is_gibberish(probe):
         return _short_circuit(GIBBERISH_MESSAGE)
 
     return None
@@ -1418,7 +1418,65 @@ def process_turn(
     existing_pending_query: Optional[str] = None,
     existing_pending_similarity: Optional[float] = None,
 ) -> TurnResult:
+    """Public entry point. Resolves the turn, translating around it when the customer did
+    not write in English - see llm/translation.py for why this is a translation step and
+    not a second set of rules in every language.
+
+    Two things happen here and nowhere else:
+
+      probe    - the English text the BUSINESS rules read. Every exclusion, cache and
+                 classifier in _resolve_turn() matches English, so on a Hindi or Hinglish
+                 turn they are handed a translation instead of text they cannot parse.
+                 Safety is deliberately not part of this: is_severe_slur() and the
+                 moderation API already work across scripts, and they run on the real text
+                 inside _resolve_turn(), so a failed or hostile translation cannot weaken
+                 them. The customer's own words are still what reaches Pass 2 and what a
+                 ticket carries.
+
+      localize - the fixed English strings in this module, rendered back into the
+                 customer's language. Without this, fixing the routing would hand a Hindi
+                 customer a correct answer in the wrong language - a different bug, not a
+                 fix. Only canned replies need it; Pass 2 already answers in the language
+                 it was asked in.
+
+    Both steps fail open: no translation means the turn runs exactly as it does today.
+    """
+    probe, customer_language = raw_query, None
+    # Detection and translation both read the raw text - see _ENGLISH_WORD_RATIO for why
+    # the typo-corrected text is the wrong input here.
+    if needs_translation(raw_query):
+        english = to_english(raw_query)
+        if english:
+            probe, customer_language = english, raw_query
+            # The spellchecker is an English dictionary, so on non-English text it does not
+            # correct typos - it invents them. Measured: "geometra ki keemat kya hai" (what
+            # does Geometra cost) was "corrected" to "geometra ki kermit kya hai", and Pass 2
+            # dutifully answered a question about Kermit. The raw text is what Pass 2 and
+            # Pass 1 get from here on; correction only ever applied to English anyway.
+            query = raw_query
+
+    result = _resolve_turn(
+        query, raw_query, probe, history, awaiting,
+        existing_pending_query, existing_pending_similarity,
+    )
+
+    if customer_language is None or not result.canned or not result.response.strip():
+        return result
+    return result._replace(response=localize(result.response, customer_language))
+
+
+def _resolve_turn(
+    query: str,
+    raw_query: str,
+    probe: str,
+    history,
+    awaiting: Optional[str],
+    existing_pending_query: Optional[str] = None,
+    existing_pending_similarity: Optional[float] = None,
+) -> TurnResult:
     """query: typo-corrected text (drives retrieval/relevance/the LLM prompt).
+    probe: the English view of the message that every business rule below reads. Equal to
+    raw_query on an English turn, which is the overwhelming majority of them.
     raw_query: the customer's original, uncorrected text - becomes the held ticket
     question ONLY when this turn starts a new question thread; a turn that's continuing an
     already-in-progress thread (a clarification reply, an "already tried that") keeps the
@@ -1465,16 +1523,16 @@ def process_turn(
     # violent message ("I'll stab you with a knife") contains no "measure", matches nothing
     # here, and goes on to moderation exactly as before. is_severe_slur() has also already
     # run above, so an abusive message that happens to mention a knife is still blocked.
-    if is_solid_representation_question(raw_query):
+    if is_solid_representation_question(probe):
         return _short_circuit(MANNEQUIN_EXCLUSION_MESSAGE)
     if awaiting is None:
-        exclusion_reason = find_definite_exclusion_reason(raw_query)
+        exclusion_reason = find_definite_exclusion_reason(probe)
         if exclusion_reason:
             return _short_circuit(EXCLUDED_ITEM_MESSAGE_TEMPLATE.format(reason=exclusion_reason))
 
     # See find_printer_type_question() - printing the marker is a required step to use
     # Geometra at all, and Pass 2 was refusing ordinary printer questions outright.
-    printer_type = find_printer_type_question(raw_query)
+    printer_type = find_printer_type_question(probe)
     if printer_type:
         return _short_circuit({
             "laser": PRINTER_LASER_MESSAGE,
@@ -1487,8 +1545,8 @@ def process_turn(
     # Pass 2 path, which only managed 10/12 on real models and answered "I don't have
     # specific information" on the other two. A classifier failure returns None and falls
     # through to Pass 2 exactly as before this existed.
-    if mentions_printer_model(raw_query):
-        classified = classify_printer_type(raw_query)
+    if mentions_printer_model(probe):
+        classified = classify_printer_type(probe)
         if classified == "laser":
             return _short_circuit(PRINTER_LASER_MESSAGE)
         if classified == "inkjet":
@@ -1541,7 +1599,7 @@ def process_turn(
             return _short_circuit(SAFETY_REFUSAL_MESSAGE)
         return _short_circuit(OUT_OF_SCOPE_MESSAGE)
 
-    deterministic = _deterministic_short_circuit(raw_query, awaiting)
+    deterministic = _deterministic_short_circuit(probe, awaiting)
     if deterministic is not None:
         # Moderation still gates every deterministic reply exactly as it did when the
         # call ran inline here - the only thing that changed is that it ran concurrently.
@@ -1555,8 +1613,8 @@ def process_turn(
     # measure" verdict then REPLACES Pass 2 rather than preceding it, so the path this
     # claims ends up faster than it is today, not slower.
     measurability = None
-    if _is_measurability_question(raw_query):
-        measurability = _MODERATION_POOL.submit(classify_measurability, raw_query)
+    if _is_measurability_question(probe):
+        measurability = _MODERATION_POOL.submit(classify_measurability, probe)
 
     # Pass 1 — Understand. Its entire job is resolving pronouns and references against
     # recent history ("and a commode too?" -> "can Geometra measure a commode?"), so on
@@ -1573,7 +1631,15 @@ def process_turn(
 
     # Fast-path scope check: ONE retrieve call, reused for both the gate and Pass 2.
     # retrieve_combined() also pulls in the isolated website knowledge base.
-    chunks, confidence = retrieve_combined(reformulated_query)
+    # Retrieval runs on the English probe when there is one. The FAQ corpus is English, so
+    # a Hindi or Hinglish query is otherwise asking for a cross-lingual embedding match -
+    # the weakest kind, on the layer that decides what Pass 2 actually gets to read. The
+    # customer's own text still reaches Pass 2 below, so the answer stays in their language.
+    #
+    # Known limit: on a multi-turn non-English conversation this loses Pass 1's pronoun
+    # resolution, since the probe is a translation of this turn alone. Retrieval on the
+    # right language for a slightly less resolved question beats the reverse.
+    chunks, confidence = retrieve_combined(probe if probe != raw_query else reformulated_query)
 
     # Moderation was started before any of the work above and has been running alongside
     # it - joined here, before a single word is composed for the customer, so it still
@@ -1594,14 +1660,14 @@ def process_turn(
 
     top1 = chunks[0].similarity_score if chunks else 0.0
     keyword_hit = is_query_relevant(query)
-    # See _is_non_latin_script(): this gate can't evaluate a script its keyword list and
+    # See llm/translation.py's is_non_latin_script(): this gate can't evaluate a script its keyword list and
     # its embedding corpus are both blind to, so it defers to Pass 2 rather than guessing.
-    if not keyword_hit and top1 < FAST_PATH_SIMILARITY_THRESHOLD and not _is_non_latin_script(raw_query):
+    if not keyword_hit and top1 < FAST_PATH_SIMILARITY_THRESHOLD and not is_non_latin_script(raw_query):
         return TurnResult(
             response=OUT_OF_SCOPE_MESSAGE, new_awaiting=None, update_pending=False,
             pending_query=None, pending_similarity=None, chunks=[], confidence_level=confidence,
             show_sources=False, input_tokens=u_in_tok, output_tokens=u_out_tok,
-            raise_ticket_now=False, skip_check_in=True,
+            raise_ticket_now=False, skip_check_in=True, canned=True,
         )
 
     # Pass 2 — Answer / Refine. Also forces the cap when the customer signals they already
@@ -1635,13 +1701,14 @@ def process_turn(
         held_query = raw_query
         held_similarity = top1
 
-    def _pass2_result(text, new_awaiting, show_sources, raise_ticket_now=False):
+    def _pass2_result(text, new_awaiting, show_sources, raise_ticket_now=False, canned=False):
         return TurnResult(
             response=text, new_awaiting=new_awaiting, update_pending=True,
             pending_query=held_query, pending_similarity=held_similarity, chunks=chunks,
             confidence_level=confidence, show_sources=show_sources,
             input_tokens=total_in, output_tokens=total_out,
             raise_ticket_now=raise_ticket_now, skip_check_in=not show_sources,
+            canned=canned,
         )
 
     stripped = response.strip()
@@ -1650,7 +1717,7 @@ def process_turn(
         # stripping the tag like the other leaked-tag cases below - unlike a leaked
         # [CANNOT_ANSWER] on an otherwise-fine answer, text generated alongside a refusal
         # attempt isn't safe to assume is fine to show.
-        return _pass2_result(SAFETY_REFUSAL_MESSAGE, None, show_sources=False)
+        return _pass2_result(SAFETY_REFUSAL_MESSAGE, None, show_sources=False, canned=True)
 
     is_clarify_shaped = stripped.startswith("[CLARIFY]") or looks_like_clarify_question(stripped)
 
@@ -1666,7 +1733,7 @@ def process_turn(
     # What separates them is whether the customer named a subject at all, which is cheap to
     # test directly. A concrete question that drew a clarifying question gets one retry
     # with the blunt instruction that already works for the clarification cap.
-    if is_clarify_shaped and not already_clarified and not is_genuinely_vague(raw_query):
+    if is_clarify_shaped and not already_clarified and not is_genuinely_vague(probe):
         response, r_in_tok, r_out_tok = answer_pass(
             reformulated_query, intent, chunks, confidence, answer_now_retry=True
         )
@@ -1690,7 +1757,7 @@ def process_turn(
         stripped = response.strip()
         is_clarify_shaped = stripped.startswith("[CLARIFY]") or looks_like_clarify_question(stripped)
         if is_clarify_shaped:
-            return _pass2_result(TICKET_OFFER_MESSAGE, "ticket_confirmation", show_sources=False)
+            return _pass2_result(TICKET_OFFER_MESSAGE, "ticket_confirmation", show_sources=False, canned=True)
 
     if stripped.startswith("[CLARIFY]"):
         text = clean_leaked_artifacts(stripped[len("[CLARIFY]"):].strip())
@@ -1705,7 +1772,7 @@ def process_turn(
         # Warmer than a flat "I don't have enough information" - the customer's question
         # was clear, the FAQ just genuinely doesn't cover it, so this should read as "I
         # won't guess and get it wrong for you," not as a dead end.
-        return _pass2_result(TICKET_OFFER_MESSAGE, "ticket_confirmation", show_sources=False)
+        return _pass2_result(TICKET_OFFER_MESSAGE, "ticket_confirmation", show_sources=False, canned=True)
 
     text = _apply_guardrails(clean_leaked_artifacts(stripped), chunks)
     # A real answer that followed a capped round IS the genuine solve attempt - track that

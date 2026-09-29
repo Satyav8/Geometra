@@ -9,6 +9,9 @@ __pycache__/
 venv/
 .venv/
 backend/data/chroma_db/
+# Same store, created at the repo root when the suite is run from here instead of
+# from backend/ - the Chroma path resolves relative to the working directory.
+data/chroma_db/
 backend/geometra_chat.db
 *.db
 node_modules/
