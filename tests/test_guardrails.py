@@ -19,15 +19,15 @@ def make_chunk(text, section="Pricing", score=0.9):
 
 
 def test_uncertainty_language_triggers_fallback():
-    response, triggered = check_uncertainty_language("I think the price is 399.")
+    response, triggered = check_uncertainty_language("I think the price is 199.")
     assert triggered is True
     assert response == FALLBACK_MESSAGE
 
 
 def test_uncertainty_language_allows_clean_response():
-    response, triggered = check_uncertainty_language("The price is 399 per wall. [Source: Pricing]")
+    response, triggered = check_uncertainty_language("The price is 199 per wall. [Source: Pricing]")
     assert triggered is False
-    assert "399" in response
+    assert "199" in response
 
 
 def test_uncertainty_language_allows_factual_tolerance_wording():
@@ -65,9 +65,9 @@ def test_numerical_hallucination_flags_unfounded_number():
 
 
 def test_numerical_hallucination_allows_grounded_number():
-    chunks = [make_chunk("We are priced at 399 per wall.")]
+    chunks = [make_chunk("We are priced at 199 per wall.")]
     response, triggered = check_numerical_hallucination(
-        "The price is 399 per wall. [Source: Pricing]", chunks
+        "The price is 199 per wall. [Source: Pricing]", chunks
     )
     assert triggered is False
 
@@ -75,7 +75,7 @@ def test_numerical_hallucination_allows_grounded_number():
 def test_numerical_hallucination_allows_constants():
     chunks = [make_chunk("Free plan gives 3 walls.")]
     response, triggered = check_numerical_hallucination(
-        "Accuracy is 99%+ and pricing is 399 per wall. [Source: Pricing]", chunks
+        "Accuracy is 99%+ and pricing is 199 per wall. [Source: Pricing]", chunks
     )
     assert triggered is False
 
@@ -107,9 +107,9 @@ def test_fallback_leakage_leaves_clean_fallback_alone():
 
 
 def test_fallback_leakage_leaves_normal_response_alone():
-    response, triggered = check_fallback_leakage("The price is 399 per wall. [Source: Pricing]")
+    response, triggered = check_fallback_leakage("The price is 199 per wall. [Source: Pricing]")
     assert triggered is False
-    assert "399" in response
+    assert "199" in response
 
 
 def test_fallback_leakage_catches_newline_variant():

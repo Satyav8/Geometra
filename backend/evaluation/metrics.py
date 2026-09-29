@@ -160,8 +160,8 @@ def price_accuracy(response: str) -> EvaluationResult:
     mentions_price = any(k in lower for k in ["price", "cost", "₹", "rupee", "per wall"])
     if not mentions_price:
         return _result("price_accuracy", True, None, "Response does not mention price — not applicable")
-    passed = "399" in response or ("free" in lower and "3" in response)
-    return _result("price_accuracy", passed, None, "Price matches FAQ" if passed else "Price does not match FAQ (expected 399 or free-plan-gives-3)")
+    passed = "199" in response or ("free" in lower and "3" in response)
+    return _result("price_accuracy", passed, None, "Price matches FAQ" if passed else "Price does not match FAQ (expected 199 or free-plan-gives-3)")
 
 
 def numerical_accuracy(response: str, chunks: List[SourceChunk]) -> EvaluationResult:

@@ -6,7 +6,7 @@ from evaluation import metrics
 from models import SourceChunk
 
 
-def make_chunk(section="Pricing", text="We are priced at 399 per wall.", score=0.9):
+def make_chunk(section="Pricing", text="We are priced at 199 per wall.", score=0.9):
     return SourceChunk(chunk_id="faq_010", section=section, text=text, similarity_score=score)
 
 
@@ -18,9 +18,9 @@ def test_retrieval_precision_pass_and_fail():
 
 
 def test_answer_faithfulness_detects_ungrounded_sentence():
-    chunks = [make_chunk(text="Geometra is priced at 399 per wall elevation.")]
+    chunks = [make_chunk(text="Geometra is priced at 199 per wall elevation.")]
     grounded = metrics.answer_faithfulness(
-        "Geometra pricing is 399 per wall elevation. [Source: Pricing]", chunks
+        "Geometra pricing is 199 per wall elevation. [Source: Pricing]", chunks
     )
     ungrounded = metrics.answer_faithfulness(
         "Geometra was founded by astronauts in space stations. [Source: Pricing]", chunks
@@ -51,9 +51,9 @@ def test_hallucination_rate_flags_unlisted_numbers():
 
 def test_source_citation_accuracy():
     chunks = [make_chunk(section="Pricing")]
-    valid = metrics.source_citation_accuracy("The price is 399. [Source: Pricing]", chunks)
-    invalid = metrics.source_citation_accuracy("The price is 399. [Source: Accuracy]", chunks)
-    missing = metrics.source_citation_accuracy("The price is 399.", chunks)
+    valid = metrics.source_citation_accuracy("The price is 199. [Source: Pricing]", chunks)
+    invalid = metrics.source_citation_accuracy("The price is 199. [Source: Accuracy]", chunks)
+    missing = metrics.source_citation_accuracy("The price is 199.", chunks)
     assert valid.passed is True
     assert invalid.passed is False
     assert missing.passed is False
@@ -70,7 +70,7 @@ def test_response_conciseness():
 def test_false_fallback_rate():
     high_conf_chunks = [make_chunk(score=0.9)]
     false_fallback = metrics.false_fallback_rate(high_conf_chunks, FALLBACK_MESSAGE)
-    normal_response = metrics.false_fallback_rate(high_conf_chunks, "The price is 399. [Source: Pricing]")
+    normal_response = metrics.false_fallback_rate(high_conf_chunks, "The price is 199. [Source: Pricing]")
     assert false_fallback.passed is False
     assert normal_response.passed is True
 
@@ -90,7 +90,7 @@ def test_context_window_efficiency():
 
 
 def test_price_accuracy():
-    correct = metrics.price_accuracy("The price is 399 per wall. [Source: Pricing]")
+    correct = metrics.price_accuracy("The price is 199 per wall. [Source: Pricing]")
     wrong = metrics.price_accuracy("The price is 500 per wall. [Source: Pricing]")
     not_applicable = metrics.price_accuracy("Geometra measures wall elevations. [Source: Product Overview]")
     assert correct.passed is True
@@ -99,8 +99,8 @@ def test_price_accuracy():
 
 
 def test_tone_consistency():
-    clean = metrics.tone_consistency("The price is 399 per wall. [Source: Pricing]")
-    hedging = metrics.tone_consistency("I think the price might be 399.")
+    clean = metrics.tone_consistency("The price is 199 per wall. [Source: Pricing]")
+    hedging = metrics.tone_consistency("I think the price might be 199.")
     assert clean.passed is True
     assert hedging.passed is False
 
