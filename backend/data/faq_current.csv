@@ -1,0 +1,124 @@
+category,question,answer
+Geometra FAQ,"What is Geometra, in one line?","Geometra is an image-to-CAD system that allows you to measure your space, such as wall elevations, directly from photos taken with your phone by following the system's provided instructions."
+Geometra FAQ,How does it actually work — step by step?,"1. Place Marker: Put the Geometra marker on any surface to create a reference point. 2.Take Photo: Take a photo where you can clearly see the wall edges and at least three corners. 3.Measure: Instantly measure the wall through Geometra's interface, supported by robust backend processing and precise accuracy."
+Geometra FAQ,"Do I need any special hardware, scanner, or laser device?","1. Printing the Marker: A laser printer is preferred. Be sure to follow the instructions, keep in portrait mode and maintain a custom scaling of 100% and let the margin be None. 2. Taking Photos: No specialized camera or high-end smartphone is required; any standard phone will work. 3. Geometra Interface: Since Geometra is a web-based application, it can be used on any standard PC, laptop, or desktop computer."
+Geometra FAQ,"Do I have to download an app, or does it work in a browser?","Geometra functions completely as a web-based application without any necessary downloads, allowing it to be utilized on any standard desktop computer, laptop, or PC."
+Geometra FAQ,What do I get at the end — what does the output look like?,"1. Wall Elevations: CAD wall elevation outputs are provided in DXF and PDF formats.
+2. Image Measurements: Measurements overlaid on the original image background are provided in PNG and PDF formats."
+Geometra FAQ,Is this a floor-plan tool or an elevations tool (or both)?,"Geometra functions as an elevations tool, providing wall elevations with a precision of 99%+."
+Geometra FAQ,"How accurate is it? What does ""99% accurate"" mean in mm?","Right from your first image capture, Geometra ensures an accuracy of 99%+. For instance, a 1000mm measurement in length or width might have a variance of + or - 10mm."
+Geometra FAQ,Can I trust these measurements for real client work / fabrication?,"With an accuracy rate of over 99%+, Geometra provides dependable measurements that can be safely relied upon for professional client projects and fabrication."
+Geometra FAQ,What happens if a measurement is wrong — can I verify it?,"Geometra ensures an accuracy of 99%+. However, you can verify the measurements by measuring tape or a laser manually."
+Geometra FAQ,"When does accuracy drop (lighting, angle, distance)?","Ensure the Geometra marker is applied flatly without any folds, creases, or bumps, and that all four corners are securely adhered. When capturing the image, verify that wall edges are distinct and minimum of three corners are captured  properly. We can only measure what is visible, so confirm that any target element you wish to measure is fully visible in the photograph."
+Geometra FAQ,Has it been tested against a laser measure or a real survey?,"Yes, we have rigorously tested and verified our tool with laser measure in a real survey."
+Geometra FAQ,What's the largest / smallest wall it can measure accurately?,"Various sizes of Geometra markers are available to suit different wall dimensions: 1. A5 size, tailored for highly confined areas which can be upto 2m(e.g., washbasins); 2. A4 size, the standard option widely utilized for typical home and office walls which can be upto 5m; 3. A3 size, designed for larger surfaces such as clubhouses and warehouses which can be upto 7m."
+Geometra FAQ,What is the marker and why do I need it?,"The Geometra Marker is the essential reference point that unlocks professional-grade precision. By simply placing the marker, Geometra instantly allows you to measure the whole wall with a single photo."
+Geometra FAQ,"How do I print it — any printer model, any paper size quality?","A laser printer is preferred. Be sure to follow the instructions. The marker should be printed in black and white, keep it in portrait mode and maintain a custom scaling of 100% with margin has none. 125 GSM with matte lamination is preferrable for reuse."
+Geometra FAQ,"Where exactly do I place it, and does placement affect accuracy?","You can position the marker anywhere on the wall, as its placement does not affect the measurement accuracy."
+Geometra FAQ,"Can I start before the physical marker kit arrives? If yes, how?","The Geometra marker is needed to start the measurement process, and it can be printed directly from the marker section."
+Geometra FAQ,"Can I reuse a marker, or do I need a new one each time?","The marker can be used repeatedly as long as it is not bent, folded, or torn."
+Geometra FAQ,What if the marker is slightly bent / dirty? Do I need to buy a new one?,"Replace the marker when the marker is bent,folded or torn"
+Geometra FAQ,How many corners/edges of the wall need to be visible?,"For example, if you are photographing a rectangular wall, you must ensure at least three of its corners are clearly visible in your photo for the system to process the measurement.(If its N number of sides, then N-1 corners must be visible)."
+Geometra FAQ,"Can I measure a whole room, or is it one wall at a time?","With the Geometra elevation version, we can measure one wall at once."
+Geometra FAQ,"Can I measure ceilings and floors, or only walls?","We can measure any area that is clearly visible in the photograph. Make sure the area you want to measure is fully visible, and follow all the instructions given on the website."
+Geometra FAQ,How much does it cost?,We are priced at 199/- per wall.(with all measurements and DXF elevation)
+Geometra FAQ,"What's included in the Free plan, and what are its limits? Tell me all plans",Free Plan: Measure up to 3 wall elevations and download them with no strings attached. Paid Plan: A single simple plan priced at 199/- per wall elevation.
+Geometra FAQ,"Is there a free trial, before I pay?",Yes there is a free trail.Measure up to 3 wall elevations and download them with no strings attached.
+Geometra FAQ,Can I get a refund if a scan fails or a measurement is wrong?,Refer our refund policy.
+Geometra FAQ,What happens to the photos I upload — are they stored?,The images will be stored and be processed as according to our privacy and data policy.
+Geometra FAQ,"Where is the data hosted,  is it secure & compliant with data-protection rules?","All data is securely stored in an S3 bucket, ensuring complete safety and full compliance with all data protection rules and regulations.."
+Geometra FAQ,How do I sign up,You can sign up using GOOGLE or your E-mail. [sign up here: www.geometra.in]
+Geometra FAQ,Is there a tutorial or onboarding guide?,"No, We do not offer a gamified tutorial but for further assistance,  we provide training and illustration videos."
+Geometra FAQ,Is there training or certification need for the user,No formal training is required; you can simply complete the Geometra tutorial to start using the tool.
+Geometra FAQ,Why not just use a tape measure or a laser measure?,A tape or laser measures one point at a time and someone has to write down the measurements. Geometra measures a whole wall from a single photo in seconds and gives you a ready CAD drawing faster and with fewer mistakes. Avoids re-works and re-visits.
+Geometra FAQ,Why is it better than hiring a surveyor for as-builts?,"A surveyor costs more and takes time to visit and draw the wall. With Geometra you take a photo and get an accurate, CAD-ready wall drawing yourself in minutes, at a fraction of the cost."
+Geometra FAQ,What are the  limitations — when should I NOT use Geometra?,"Geometra measures one wall at a time and only measures the parts that are clearly visible in the photo. The marker must be visible, along with the wall edges and at least 3 corners. Geometra provides wall measurements/elevations, not a complete floor plan. And it cannot measure hidden areas or an entire room from a single photo. Make sure the wall is dry and not wet. Geometra also does not support curved or circular walls."
+Geometra FAQ,"What phone camera settings work best — resolution, flash on or off?","Use your phone's standard camera app in photo mode. No special settings needed. A few tips for best results:
+ 
+ Resolution: Default setting is fine. A clear, steady shot matters more than high megapixel counts.
+ 
+ Flash: Turn it OFF. Flash creates harsh reflections and shadows that confuse the system. Use natural or room light.
+ 
+ HDR / Live Photos: Turn these off if possible to avoid processing distortion along edges.
+ 
+ Zoom: Don't zoom in. Step back physically so the whole wall fits in the frame.
+ 
+ Focus: Hold steady and tap to focus on the marker before shooting."
+Geometra FAQ,"Can I print the marker in colour, or must it be black and white?","Print it in black and white; This is important. The marker uses a high-contrast pattern, and colour printing can reduce contrast, making detection harder. If using a colour printer, switch to greyscale/monochrome mode."
+Geometra FAQ,What if the room is dark or has strong shadows — do I need extra lighting?,"Yes, proper lighting matters:
+ 
+ Dark rooms: Turn on ceiling lights and open curtains so the wall is evenly lit.
+ 
+ Hard shadows: Close curtains partially to diffuse direct sunlight. Overcast daylight is ideal.
+ 
+ Glare: Reposition or adjust lights to eliminate bright reflections on the wall.
+ 
+ Rule of thumb: If the marker and wall edges look sharp on your screen, the measurement will work."
+Geometra FAQ,Can I edit the DXF file after downloading it? Which software opens it?,"Yes, the DXF file is a standard CAD format. It opens in AutoCAD, BricsCAD, DraftSight, LibreCAD, SketchUp (with plugin), Rhino, ArchiCAD, and Revit. The file provides a clean, editable line drawing that is not locked or flattened."
+Geometra FAQ,"Does the DXF include dimensions and annotations, or just the line drawing?","The DXF includes both line drawings and key dimensions in millimetres, as well as openings like doors and windows. Everything is placed on editable layers so you can toggle annotations on or off."
+Geometra FAQ,Can I buy scans in bulk? Is there a volume discount for studios or firms?,Yes. Beyond the INR 199 + taxes per-scan rate. For many queries contact : contact@geometra.in or visit [geometra.in/pricing].
+Geometra FAQ,What payment methods are accepted?,"We accept UPI (Google Pay, PhonePe, Paytm), debit/credit cards (Visa, Mastercard, RuPay), Net Banking, and digital wallets. NEFT/bank transfers are available for enterprise accounts upon request."
+Geometra FAQ,"Does it work on a mobile browser, or only on a desktop/laptop?","Geometra is optimised for desktop and laptop browsers. Recommended workflow: take photos on mobile, then upload and process on desktop."
+Geometra FAQ,What internet speed or connection do I need to upload photos?,"A standard 4G or broadband connection is sufficient. Photos are typically 3-8 MB, uploading in seconds even on 5 Mbps connections. Note: Internet connection is required as processing happens on cloud servers."
+Geometra FAQ,Is there a file size limit for uploaded photos?,"Yes, the maximum file size per photo is [10 MB]."
+Geometra FAQ,Can Geometra staff view my uploaded photos? Who has access to them?,"Photos uploaded to Geometra are private. Only authorized Geometra staff can access user photos when necessary to provide support, troubleshoot issues,training or maintain the service. Other staff members cannot view these files unless access is specifically granted for a support request. Images are not shared with third parties without the user's permission, except where required by law."
+Geometra FAQ,How long are my photos and files stored? Can I delete them?,We retain uploaded photos for up to 6 months before automatic deletion. You can also manually delete scans from your account dashboard at any time for immediate removal.
+Geometra FAQ,Can I share my Geometra output directly with a client or contractor?,Yes. You can export DXF/PDF files directly or share a view-only link that lets recipients review measurements without needing an account.
+Geometra FAQ,Can multiple team members access the same account or project?,No.
+Geometra FAQ,"Does Geometra work offline, or do I need internet on-site?","You can take photos offline on-site. Once back online, upload the photos to your desktop browser to process measurements. Processing requires an active internet connection."
+Geometra FAQ,"Does it work on curved walls, or irregular surfaces?","Geometra is designed for flat, rectangular walls (99%+ accuracy). Curved walls or arches results in reduced accuracy due to planar geometry assumptions, so use those outputs for reference only."
+Geometra FAQ,Does it measure door and window openings within a wall?,"Yes. Make sure the entire door frame or window opening is clearly visible in the photo. Geometra will use the visible opening, i.e., the corners, to measure and show its dimensions in the final output."
+Geometra FAQ,What's the turnaround time if a scan fails and I raise a support request?,"We respond within 24 hours on working days (Mon-Sat, 9 AM-6 PM IST). Technical processing errors will result in account credits or automated re-runs within the same business day."
+Geometra FAQ,Can I paste the marker tilted?,"No, you should stick the marker straight up, aligned with the arrow printed on it."
+Geometra FAQ,Can we take image having humans in the frame?,Avoid having humans in the frame while taking picture.
+Geometra FAQ,What all should be checked before uploading the picture?,We need to ensure that the marker is pasted correctly and the photo is captured according to the instructions provided on the Website. Upload the Picture ensuring same size & resolution during the original capture . Compressed picture will give incorrect measurements
+Geometra FAQ,Can I measure sockets?,"Yes, The socket will be measured if it is captured in the image of the wall that has 3 corners clearly visible."
+Geometra FAQ,Can I use geometra to measure external walls?,"No, Geometra is designed specifically for measuring interior walls and surfaces."
+Geometra FAQ,Can I take a picture and get measurements without sticking the marker to the wall ?,"No, the Geometra marker must be pasted on the wall before taking the photograph."
+Geometra FAQ,"I want to measure a wardrobe, to know if it will fit in my room or not?","Of course, you can measure your wardrobe. Simply stick the Geometra marker on it and take a photo, ensuring that at least three corners and all relevant details are clearly visible."
+Geometra FAQ,Can I place different Geometra Marker sizes on the same wall?,"Depending on the size of the wall, same marker should be used. follow this
+The Geometra marker is available in 3 sizes:
+12 cm (A5) — for surfaces up to 2m
+18 cm (A4) — for surfaces larger than 2m and up to 5m
+25 cm (A3) — for surfaces larger than 5m and up to 7m
+To use more than one Geometra marker , there should be different planes which may have noticiable different depth . Here more than one marker should be used"
+Geometra FAQ,"During rectification / area selection for measurement, can more than one Geometra Marker be included in a single separate plan?","No, each separate plane should have only one Geometra marker."
+Geometra FAQ,Can I measure transparent and reflective glass doors/windows?,"No, transparent or reflective surfaces cannot be measured accurately."
+Geometra FAQ,Can I take photos using Wide-Angle mode?,"Yes, it should be within the 0.9x-0.6x."
+Geometra FAQ,Can I take photos using Telephoto/Zoom mode?,"Zoom mode is not recommended, as it can reduce or lose details, especially with digital zoom. It is better to move closer to the object and take the photo without zooming."
+Geometra FAQ,Can I take close-up photos using Panaroma mode?,"No panorama mode, as it distort the image."
+Geometra FAQ,What all should be checked before taking a picture?,"Check Geometra Marker placement and printing, and take photos as per the instruction on the Website"
+Geometra FAQ,Can we measure the furniture?,"It depends on the furniture type. If it's a wardobe or any rectangular furniture, It will work. But if we didnt get any straight plane to stick marker to find the measurement, then it cannot."
+Geometra FAQ,Can we measure the staircase?,"No, staircase cant be measured."
+Geometra FAQ,"Can I place geometra marker between different planes, can I get measurement accurately?","No, don't place each marker between depths. Pasting in between will give you an inaccurate measurement."
+Geometra FAQ,Can I measure the rooms which is more than 5 sides ?,"Yes you can measure, But it should be closed surface and also should have more than 4 points in the picture"
+Geometra FAQ,Can I measure the wall with more than 5 depths?,We can measure the wall with any number of depths if we have markers pasted on it straight on each plane.
+Geometra FAQ,"If I don't paste the marker, but hold the marker which is looking like pasted to the wall. Will i get accurate measurements?","NO, to get accurate measurements , the marker should be pasted on the wall , this will help to give accurate measurments. Avoid holding the marker in hand while taking the photo."
+Geometra FAQ,What should be the resolution of the images?,"The resolution of the image that is uploaded on the Geometra site, should have the same resolution of the image taken through the phone or the camera. This will help to give correct measurements ."
+Geometra FAQ,Is it possible for me to upload images through whatsapp or Telegram?,"No , because the images on WhatsApp or Telegram compresses the original picture size."
+Geometra FAQ,"Is it possible for me to use any camera, does the quality of the image matter?",You can use any camera as long as it captures the details clearly.
+Geometra FAQ,Is it possible for me to take two walls at a time and take measurements?,"Yes, you can, but ensure all corners and details of both walls are clearly visible. The walls should not be cut off in the photo."
+Geometra FAQ,Is it possible for me to take the image from the side angle instead of the center angle?,"Yes, however ensure that the picture taking angle should not be beyond 30 degrees. Ideally, take the picture standing infront of the marker to give accurate measurement"
+Geometra FAQ,Is that possible for me to log on the website & take a picture using a  tablet?,You can use the tablet to take pictures but for accessing the workspace you will have to switch to a desktop or a laptop.
+Geometra FAQ,how can I reach out to geometra team?,You can reach out to us through email or chat.  hello@geometra.in
+Geometra FAQ,How credit system work in geometra? How credit will be deducted?,It will be updated soon.
+Geometra FAQ,How I can get free credits in Geometra?,It will be updated soon.
+Geometra FAQ,How to paste Geometra marker so that it will not ruin the wall?,Using masking/abro tape recommended by geometra
+Geometra FAQ,Which kid of tape can be used for stick the marker?,Masking / abro tape or tapes reccomended by geometra
+Geometra FAQ,Can i measure a tomb?,Geometra cannot measure circular or curved indoor walls  i.e It can only measure the regular closed polygon walls.
+Geometra FAQ,"I have put marker on the wall, whenever I try to capture, the marker is glossy while capturing ,is it okay?","No, you will not get accurate measurements. Avoid glare on the geometra marker to get accurate detection and measurements."
+Geometra FAQ,Can I measure the wall without marker?,"No, the Geometra marker must be pasted on the wall before taking the photograph. Geometra Marker is important for getting the reference point."
+Geometra FAQ,"Is it important that geometra marker which is printed in A4 to be 18cm, A3 to be 25cm, A5 to be 12cm?","Yes, it is important that A4 marker to be 18cm, A3 marker to be 12 cm, A5 marker to be 25cm."
+Geometra FAQ,Can I measure the swimming pool?,Geometra cannot measure circular or curved indoor walls  i.e It can only measure the regular closed polygon walls. A swimming pool can be measured without water in it
+Geometra FAQ,"My window is also there on the wall, which is covered by curtains , so can I measure window if the 3 corners of wall is visible?","To get accurate measurements, draw the curtains, keep the window in the picture & ensure 3 corners are visible, Point, shoot and capture the image!"
+Geometra FAQ,Can i get 3d drawing from geometra?,"No, you will get 2d dxf file of the wall elevation."
+Geometra FAQ,Is that ok if i took photos of the wall with marker in low light?,Yes as long as corners and details of walls are clearly visible. Avoid taking pictures at night & extreemly dim light as it will blur the picture.
+Geometra FAQ,Is it ok i paste the marker in photoshop or any editing tool and upload?,"No, marker should be pasted in real time"
+Geometra FAQ,Can I  stick the marker on a curved wall?,Geometra can't measure curve walls
+Geometra FAQ,Does geoemetra has USA sizes?,We have Geometra markers designed for standard US paper sizes. Each paper size has a specific marker size and measurement range. Ledger (11 × 17 inches / 27.94 × 43.18 cm)uses a 25 cm marker and can measure walls up to 7 m. Letter (8.5 × 11 inches / 21.59 × 27.94 cm) uses an 18 cm marker and can measure walls up to 5 m. Half Letter (5.5 × 8.5 inches / 13.97 × 21.59 cm) uses a 12 cm marker and can measure walls up to 2 m. Ensure you select and print the marker that matches the paper size you are using.
+Geometra FAQ,Can geometra measure partially visible objects?,NO
+Geometra FAQ,Can I take printout from a shop somewhere ?,"You can print the Geometra marker yourself at home/office, or get it printed at any external print shop or printing service — just make sure the print settings match the instructions (laser printer preferred, portrait orientation(mandatory), 100% scale(mandatory), no resizing(mandatory)). Geometra will not specify or recommend any particular print shop or location in your area — finding a shop and confirming it can meet these settings is on you. The one thing to strictly avoid is quick-commerce/e-commerce platforms like Zepto, Blinkit, or Instamart — their print settings often don't preserve the required scale"
+Geometra FAQ,What kind of windows I can measure?,"Geometra can measure most kinds of windows; however, it does not support curved walls or curved windows."
+Geometra FAQ,Why should I not use geometra on wet walls?,"You can use the Geometra marker on a wet surface, but it is not recommended to paste it, as the tape may not stick properly. Instead, ensure the marker is straight and held firmly against the dry wall."
+Geometra FAQ,"Can Geometra measure objects that are smaller than the selected marker, where the marker cannot be placed on the object?","Generally, the object or space being measured should not be smaller than the selected marker. However, electrical outlets, sockets, AC fitting outlets, and photo frames can still be measured even when the marker cannot be placed on them, as long as they do not have a noticeable depth difference from the wall."
+Geometra FAQ,Where can I get the geometra marker?,"You can print the Geometra marker yourself at home/office, or get it printed at any external print shop or printing service — just make sure the print settings match the instructions (laser printer preferred, portrait orientation, 100% scale, no resizing). Geometra will not specify or recommend any particular print shop or location in your area — finding a shop and confirming it can meet these settings is on you. The one thing to strictly avoid is quick-commerce/e-commerce platforms like Zepto, Blinkit, or Instamart — their print settings often don't preserve the required scale"

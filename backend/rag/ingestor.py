@@ -7,7 +7,7 @@ import uuid
 import requests
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
-from config import FAQ_SHEET_CSV_URL
+from config import FAQ_FILE_PATH, FAQ_SOURCE, FAQ_SHEET_CSV_URL
 from rag import vectorstore
 from rag.embedder import embed_batch
 
@@ -134,11 +134,67 @@ def fetch_sheet_rows(csv_url: str = FAQ_SHEET_CSV_URL):
     return rows
 
 
+def fetch_file_rows(path: str = None):
+    """Reads the committed FAQ file, yielding (category, question, answer).
+
+    A plain three-column CSV that lives in the repo, rather than a Google Sheet fetched at
+    runtime. Same tuple shape as fetch_sheet_rows, so everything downstream is unchanged.
+    """
+    path = path or FAQ_FILE_PATH
+    with open(path, encoding="utf-8-sig", newline="") as f:
+        reader = csv.DictReader(f)
+        cols = {c.lower().strip(): c for c in (reader.fieldnames or [])}
+        missing = {"category", "question", "answer"} - set(cols)
+        if missing:
+            raise ValueError(f"{path} is missing expected columns: {missing}")
+        rows = []
+        for row in reader:
+            category = (row.get(cols["category"]) or "").strip()
+            question = (row.get(cols["question"]) or "").strip()
+            answer = (row.get(cols["answer"]) or "").strip()
+            if category and question and answer:
+                rows.append((category, question, answer))
+    return rows
+
+
+def fetch_faq_rows():
+    """The single place that decides where the FAQ comes from.
+
+    FAQ_SOURCE=file (the default) reads data/faq_current.csv, which is committed to the
+    repo. FAQ_SOURCE=sheet restores the old behaviour of fetching a Google Sheet at
+    runtime.
+
+    The default changed on 2026-09-29 for a specific reason. The FAQ used to be fetched
+    from a Google Sheet on every ingestion, which meant anyone running
+    scripts/ingest_faq.py silently replaced whatever was loaded with that sheet's current
+    contents - twice, that reverted a deliberate content update minutes after it went in,
+    with nothing to indicate it had happened. A file in the repo is versioned, reviewable
+    in a diff, and cannot change underneath a running system.
+
+    The cost is real and worth stating: the team can no longer update the FAQ by editing
+    a spreadsheet. Changing the FAQ now means changing data/faq_current.csv and
+    re-ingesting. To go back to a sheet, set FAQ_SOURCE=sheet and point FAQ_SHEET_ID at
+    the right document.
+    """
+    if FAQ_SOURCE == "sheet":
+        return fetch_sheet_rows()
+    return fetch_file_rows()
+
+
 def ingest_faq_from_sheet(csv_url: str = FAQ_SHEET_CSV_URL) -> dict:
     sheet_rows = fetch_sheet_rows(csv_url)
     rows = [
         (category, f"Q: {question}\nA: {answer}")
         for category, question, answer in sheet_rows
+    ]
+    return _store_chunks(rows)
+
+
+def ingest_faq_current() -> dict:
+    """Ingests from whatever fetch_faq_rows() decides is the source."""
+    rows = [
+        (category, f"Q: {question}\nA: {answer}")
+        for category, question, answer in fetch_faq_rows()
     ]
     return _store_chunks(rows)
 
