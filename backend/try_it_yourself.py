@@ -862,8 +862,11 @@ _EXCLUDED_CATEGORIES = (
         # shapes with four or more sides", which is invented reasoning, not a stated rule.
         # Claimed here so the answer is a plain no with a plain reason, every time.
         re.compile(
-            r"\b(stair\s*cases?|staircases?|stairs?|stairway?s?|stair\s*wells?|"
-            r"steps?|flight\s+of\s+stairs)\b",
+            # "steps?" removed: in this product it almost always means INSTRUCTIONS, and
+            # since this category only fires when "measure" is also present, it matched
+            # exactly how customers ask how to measure something. See llm/two_pass.py.
+            r"\b(stair\s*cases?|staircases?|stairs?|stairways?|stair\s*wells?|"
+            r"flight\s+of\s+stairs)\b",
             re.IGNORECASE,
         ),
         "a staircase isn't one flat, closed surface - Geometra measures flat surfaces "
