@@ -24,6 +24,7 @@ from evaluation.metrics import evaluate_core_metrics, sqlite_log_integrity
 from integrations.resend_client import send_ticket_email
 from integrations.supabase_client import write_escalated_question
 from llm.two_pass import process_turn
+from llm.translation import localize, needs_translation
 from models import ChatRequest, ChatResponse, SourceChunk
 from rag.relevance import compute_criticality
 from rag.spelling import correct_query
@@ -91,6 +92,13 @@ def chat(request: Request, chat_request: ChatRequest, background_tasks: Backgrou
         unknown_question_id = write_unknown_question(chat_request.session_id, ticket_query, ticket_similarity)
         ticket_number = f"GEO-{unknown_question_id:03d}"
         response = TICKET_RAISED_MESSAGE.format(ticket_number=ticket_number)
+        # This one confirmation is composed here rather than in process_turn(), because it
+        # needs the ticket number that only exists once the row is written - so it misses
+        # the localization that every other fixed string gets. Localized here instead, or a
+        # customer who has been talking to SAM in Hindi throughout would get the single most
+        # important message in the conversation in English. See llm/translation.py.
+        if needs_translation(chat_request.query):
+            response = localize(response, chat_request.query)
         write_escalated_question(
             question=ticket_query,
             criticality=compute_criticality(ticket_similarity),

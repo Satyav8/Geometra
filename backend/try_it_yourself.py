@@ -20,6 +20,7 @@ from llm.client import call_llm
 from llm.moderation import is_flagged_by_moderation
 from llm.measurability import classify_measurability, reason_for
 from llm.printer_classifier import classify_printer_type
+from llm.translation import is_non_latin_script, localize, needs_translation, to_english
 from llm.multilingual_profanity import (
     ALL_TERMS as MULTILINGUAL_PROFANITY_TERMS,
     contains_native_script_profanity,
@@ -1522,16 +1523,6 @@ def _is_flagged_via_decoded_wordlist(text):
     )
 
 
-# See llm/two_pass.py's _is_non_latin_script() for the measurements behind this (mirrored
-# here per this file's sync convention): the fast-path scope gate is an English-only
-# heuristic and scores non-Latin script essentially at random, so it defers to Pass 2.
-def _is_non_latin_script(text):
-    letters = [c for c in text if c.isalpha()]
-    if not letters:
-        return False
-    return sum(1 for c in letters if ord(c) > 0x24F) / len(letters) >= 0.5
-
-
 # A question is for the measurability classifier only when it asks whether something can be
 # measured AND neither deterministic cache already knows the answer. Both halves matter:
 # without the first it would fire on pricing and printing questions; without the second it
@@ -1568,6 +1559,14 @@ def _is_measurability_question(text: str) -> bool:
 
 def process_turn(query, history, awaiting):
     """Returns (response_text, new_awaiting_state)."""
+    response, new_awaiting = _resolve_turn(query, history, awaiting)
+    if needs_translation(query) and response.strip() and not needs_translation(response):
+        response = localize(response, query)
+    return response, new_awaiting
+
+
+def _resolve_turn(query, history, awaiting):
+    """Returns (response_text, new_awaiting_state)."""
     TICKET_RAISED_MESSAGE = "[TEST] Ticket would be raised here — last 3 turns emailed via Resend."
 
     # Hard safety boundary - checked before absolutely anything else, including
@@ -1587,6 +1586,23 @@ def process_turn(query, history, awaiting):
     # fire on product questions. Gating them on moderation replaced the correct "it's a
     # weapon or tool" answer with the hard SAFETY refusal for "can i measure a knife".
     # See llm/two_pass.py for the full reasoning (mirrored per this file's sync convention).
+    # Mirrors llm/two_pass.py's process_turn(): every business rule below matches English,
+    # so a Hindi or Hinglish turn is handed a translation instead of text it cannot parse.
+    # Placed HERE, after the two safety checks above, because those read the customer's real
+    # words - a failed or hostile translation must never be able to disarm them.
+    #
+    # One deliberate difference from production: there, Pass 2 receives the customer's own
+    # text and only the fixed English strings are localized, decided by a flag on the
+    # result. This harness returns plain tuples with no such flag, so it decides by looking
+    # at the reply instead - an English reply to a non-English customer is a fixed string
+    # and gets localized. Same outcome, and no extra call when Pass 2 already answered in
+    # the customer's language.
+    original = query
+    if needs_translation(original):
+        english = to_english(original)
+        if english:
+            query = english
+
     if is_solid_representation_question(query):
         return (
             "Unfortunately, Geometra isn't able to measure that - mannequins, "
@@ -1752,14 +1768,14 @@ def process_turn(query, history, awaiting):
             if mapped and mapped[0]:
                 return EXCLUDED_ITEM_MESSAGE_TEMPLATE.format(reason=mapped[0]), None
 
-    reformulated_query, intent = understand(query, history)
+    reformulated_query, intent = understand(original, history)
 
     # Fast-path scope check: ONE retrieve() call, reused for both the gate and Pass 2.
     # retrieve_combined() also pulls in the isolated website knowledge (see website_kb.py).
     chunks, confidence = retrieve_combined(reformulated_query)
     top1 = chunks[0].similarity_score if chunks else 0.0
     keyword_hit = is_query_relevant(query)
-    if not keyword_hit and top1 < FAST_PATH_SIMILARITY and not _is_non_latin_script(query):
+    if not keyword_hit and top1 < FAST_PATH_SIMILARITY and not is_non_latin_script(original):
         return OUT_OF_SCOPE_MESSAGE, None
 
     # Pass 2 — Answer / Refine. Also forces the cap when the customer signals they
