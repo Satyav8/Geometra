@@ -102,9 +102,17 @@ def test_food_court_is_still_a_room(message):
     )
 
 
-def test_exclusions_outrank_the_in_scope_cache():
-    """"can I measure my dog next to the wall" contains "wall", but the dog decides it."""
+def test_a_message_naming_both_defers_to_the_classifier():
+    """Superseded the old "exclusions always win" rule, which was wrong in practice.
+
+    A regex cannot tell whether an excluded word is the SUBJECT or the scenery, and
+    assuming subject refused a string of ordinary questions: "two vases blocking the
+    corners of the wall", "the wall next to the staircase", "a mirror on the wall". All
+    three are about a wall. So when a message names both an excluded thing and a surface
+    Rule 8 covers, the regex steps aside and the classifier reads the sentence - measured
+    keeping "my dog next to the wall" as living and "a knife on the table" as a weapon.
+    """
     message = "can I measure my dog next to the wall"
-    assert is_known_measurable(message) is True          # the in-scope regex does match
-    assert find_definite_exclusion_reason(message) is not None   # and is overruled
-    assert _is_measurability_question(message) is False
+    assert is_known_measurable(message) is True             # both are named
+    assert find_definite_exclusion_reason(message) is None  # so the regex defers
+    assert _is_measurability_question(message) is True      # and the classifier decides

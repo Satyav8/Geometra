@@ -949,8 +949,9 @@ def find_definite_exclusion_reason(text: str) -> str | None:
     scanned = _BENEFICIARY_PHRASE_RE.sub(" ", lowered)
     for pattern, reason in _EXCLUDED_CATEGORIES:
         if pattern.search(scanned):
-            # A staircase WALL is an ordinary measurable wall - see llm/two_pass.py.
-            if reason is _STAIRCASE_REASON and is_known_measurable(text):
+            # An excluded word may be the scenery rather than the subject - see
+            # llm/two_pass.py. When a Rule 8 surface is also named, defer to the classifier.
+            if is_known_measurable(text):
                 return None
             return reason
     return None
@@ -1538,11 +1539,30 @@ def _is_non_latin_script(text):
 _MEASURE_INTENT_RE = re.compile(r"\b(measure|measuring|measurement|scan|scanning)\b", re.IGNORECASE)
 
 
+def _names_excluded_thing(text: str) -> bool:
+    """Whether any exclusion pattern matches at all, ignoring whether it gets to decide.
+
+    find_definite_exclusion_reason() returns None when a message names both an excluded
+    thing and a measurable surface, because it cannot tell which is the subject. That
+    "None" means "I am deferring", not "nothing here" - and the classifier has to be told
+    the difference, or a deferred message falls past the in-scope cache to Pass 2 with
+    nothing having decided it.
+    """
+    lowered = _BENEFICIARY_PHRASE_RE.sub(" ", text.lower())
+    return any(pattern.search(lowered) for pattern, _ in _EXCLUDED_CATEGORIES)
+
+
 def _is_measurability_question(text: str) -> bool:
     if not _MEASURE_INTENT_RE.search(text):
         return False
+    # A question about the MARKER or about printing is not a "can I measure X" question -
+    # see llm/two_pass.py. Those belong to Pass 2 and Rule 8E.
+    if _PRINTER_MODEL_CONTEXT_RE.search(text):
+        return False
     if find_definite_exclusion_reason(text) or is_solid_representation_question(text):
         return False          # an exclusion regex already has the answer
+    if _names_excluded_thing(text):
+        return True
     return not is_known_measurable(text)
 
 
