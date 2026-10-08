@@ -81,6 +81,23 @@ _ENGLISH_WORD_RATIO = 0.65
 # existing checks, which already handle bare greetings and one-word replies.
 _MIN_WORDS_FOR_RATIO = 3
 
+# Runs of three or more identical letters essentially never occur in English words, but
+# they are the normal way people write emphasis and abuse: "fuuuuuck", "heeeelp", "sooo".
+# Collapsing them before the dictionary lookup recovers the real word.
+_ELONGATION_RE = re.compile(r"(.)\1{2,}")
+
+# A message needs at least this many genuinely non-English words before it is treated as
+# non-English, no matter what the ratio says.
+#
+# Measured 2026-10-08 in production: "fuuuuuck this app" came back refused in HINGLISH. The
+# elongation hid one word and "app" is not in the dictionary either, so a three-word English
+# message scored 1/3 and was "localized" into a language the customer never used. Collapsing
+# elongation alone lifts it to 2/3 = 0.667 against a 0.65 threshold - true, but a 0.017
+# margin is not a safety property. Requiring two unknown words means a single unrecognised
+# token (a product name, an app name, a typo the spellchecker missed) can never flip a
+# message's language on its own, which is the actual failure that happened.
+_MIN_NON_ENGLISH_WORDS = 2
+
 
 def is_non_latin_script(text: str) -> bool:
     """True when at least half the letters are outside the Latin range."""
@@ -88,6 +105,15 @@ def is_non_latin_script(text: str) -> bool:
     if not letters:
         return False
     return sum(1 for c in letters if ord(c) > _LATIN_MAX) / len(letters) >= 0.5
+
+
+def _is_english_word(word: str) -> bool:
+    """Elongation-tolerant dictionary check - "sooo" counts as English, same as "so"."""
+    lowered = word.lower()
+    if is_dictionary_word(lowered):
+        return True
+    collapsed = _ELONGATION_RE.sub(r"\1", lowered)
+    return collapsed != lowered and is_dictionary_word(collapsed)
 
 
 def needs_translation(text: str) -> bool:
@@ -101,7 +127,10 @@ def needs_translation(text: str) -> bool:
     words = [w for w in _WORD_RE.findall(text) if len(w) > 1]
     if len(words) < _MIN_WORDS_FOR_RATIO:
         return False
-    english = sum(1 for w in words if is_dictionary_word(w.lower()))
+    non_english = [w for w in words if not _is_english_word(w)]
+    if len(non_english) < _MIN_NON_ENGLISH_WORDS:
+        return False
+    english = len(words) - len(non_english)
     return english / len(words) < _ENGLISH_WORD_RATIO
 
 

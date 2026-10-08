@@ -1500,7 +1500,7 @@ TICKET_ESCALATION_MESSAGE = (
 # See llm/two_pass.py's is_flagged_via_encoded_payload() for the full reasoning
 # (mirrored here per this file's own sync convention). Catches an unsafe request
 # smuggled in via base64 encoding, which no check above ever decodes and so never sees.
-_BASE64_CANDIDATE_RE = re.compile(r"[A-Za-z0-9+/]{20,}={0,2}")
+_BASE64_CANDIDATE_RE = re.compile(r"[A-Za-z0-9+/]{6,}={0,2}")
 
 
 def _decode_base64_payloads(text):
@@ -1510,8 +1510,20 @@ def _decode_base64_payloads(text):
             decoded = base64.b64decode(candidate, validate=True).decode("utf-8")
         except (binascii.Error, ValueError, UnicodeDecodeError):
             continue
+        # Guards against decoded noise. All three conditions are load-bearing at this
+        # candidate length - measured against the whole FAQ, the word "ceilings" is valid
+        # base64 and decodes to 'q\u895ax,', which passes the printable check alone because
+        # CJK characters are printable (mirrored from llm/two_pass.py per this file's sync
+        # convention; see the reasoning there).
         printable = sum(1 for c in decoded if c.isprintable() or c in "\n\t")
-        if len(decoded.strip()) >= 4 and printable / len(decoded) >= 0.85:
+        ascii_text = sum(1 for c in decoded if 32 <= ord(c) < 127 or c in "\n\t")
+        wordish = sum(1 for c in decoded if c.isalpha() or c.isspace())
+        if (
+            len(decoded.strip()) >= 4
+            and printable / len(decoded) >= 0.85
+            and ascii_text / len(decoded) >= 0.9
+            and wordish / len(decoded) >= 0.5
+        ):
             payloads.append(decoded)
     return payloads
 
