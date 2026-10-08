@@ -83,10 +83,14 @@ FAQ_SOURCE = os.getenv("FAQ_SOURCE", "sheet")
 FAQ_FILE_PATH = os.getenv("FAQ_FILE_PATH", os.path.join(os.path.dirname(__file__), "data", "faq_current.csv"))
 
 # Google Sheet settings, used only when FAQ_SOURCE=sheet
-FAQ_SHEET_ID = os.getenv("FAQ_SHEET_ID", "163VrfrWbndBASavBXa-LLaM1_xjkikI3")
-FAQ_SHEET_GID = os.getenv("FAQ_SHEET_GID", "178212144")
+FAQ_SHEET_ID = os.getenv("FAQ_SHEET_ID", "1JTQYPycJhdxLXXbJAfbV4_lgYRMgB07Z5eaOhsS3CF0")
+# Optional. Empty means "the first tab", which is what Google serves when gid is omitted.
+# The workbook has one tab, and an omitted gid cannot go stale the way a pinned id can -
+# the previous value pointed at a tab in the pre-conversion .xlsx and stopped resolving.
+FAQ_SHEET_GID = os.getenv("FAQ_SHEET_GID", "")
 FAQ_SHEET_CSV_URL = (
-    f"https://docs.google.com/spreadsheets/d/{FAQ_SHEET_ID}/export?format=csv&gid={FAQ_SHEET_GID}"
+    f"https://docs.google.com/spreadsheets/d/{FAQ_SHEET_ID}/export?format=csv"
+    + (f"&gid={FAQ_SHEET_GID}" if FAQ_SHEET_GID else "")
 )
 
 # Floor on how many rows the FAQ source must return before the mirror will write anything.
