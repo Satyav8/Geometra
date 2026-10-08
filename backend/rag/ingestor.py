@@ -111,25 +111,47 @@ def fetch_sheet_rows(csv_url: str = FAQ_SHEET_CSV_URL):
     # different position) without changing which columns are actually needed, so match
     # by lowercase name rather than exact position/casing.
     col = {name.lower(): idx for idx, name in enumerate(header)}
-    required = {"category", "question", "draft answer", "updated response"}
-    missing = required - set(col.keys())
-    if missing:
-        raise ValueError(f"FAQ sheet is missing expected columns: {missing}")
+
+    # The team has renamed and reordered these columns repeatedly ("ID" -> "SlnoSlno",
+    # "Category" -> "category ", "draft answer" -> "Response") without changing which
+    # columns are actually needed, so each role is matched by any of its known names
+    # rather than by exact header text or position. A new spreadsheet with a new wording
+    # for the same thing is a one-line addition here, not a parse failure in production.
+    def _find(*names):
+        for name in names:
+            if name in col:
+                return col[name]
+        return None
+
+    question_i = _find("question")
+    draft_i = _find("draft answer", "response", "answer")
+    revised_i = _find("updated response", "revised response", "revised answer")
+    # Category is OPTIONAL. The spreadsheet the team edits today has no such column; the
+    # label is derived instead (see llm/categorizer.py, wired up in rag/faq_sync.py).
+    # Treating its absence as an error would mean the only readable source of truth could
+    # not be read.
+    category_i = _find("category", "category ", "topic")
+
+    if question_i is None or draft_i is None:
+        raise ValueError(
+            "FAQ sheet needs a Question column and an answer column "
+            f"(one of: draft answer / Response / answer). Found: {sorted(col)}"
+        )
+
+    def _cell(row, idx):
+        return row[idx].strip() if idx is not None and idx < len(row) else ""
 
     rows = []
     for row in reader:
-        if len(row) <= col["question"]:
+        if len(row) <= question_i:
             continue
-        category = row[col["category"]].strip() if col["category"] < len(row) else ""
-        question = row[col["question"]].strip() if col["question"] < len(row) else ""
-        draft_answer = row[col["draft answer"]].strip() if col["draft answer"] < len(row) else ""
-        updated_answer = row[col["updated response"]].strip() if col["updated response"] < len(row) else ""
-        answer = updated_answer or draft_answer
-
-        if not category or not question or not answer:
+        question = _cell(row, question_i)
+        # A revised answer supersedes the original when the team has written one - the
+        # same precedence the previous sheet used.
+        answer = _cell(row, revised_i) or _cell(row, draft_i)
+        if not question or not answer:
             continue
-
-        rows.append((category, question, answer))
+        rows.append((_cell(row, category_i), question, answer))
 
     return rows
 

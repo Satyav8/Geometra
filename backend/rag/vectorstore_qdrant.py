@@ -76,7 +76,10 @@ def upsert_chunks(
     # timeout; smaller requests are both more reliable and fail (and retry) more cheaply.
     for i in range(0, len(points), _UPSERT_BATCH_SIZE):
         batch = points[i : i + _UPSERT_BATCH_SIZE]
-        resp = requests.put(_collection_url("/points"), headers=HEADERS, json={"points": batch}, timeout=30)
+        resp = requests.put(
+            _collection_url("/points?wait=true"),
+            headers=HEADERS, json={"points": batch}, timeout=30,
+        )
         resp.raise_for_status()
 
 
@@ -96,7 +99,7 @@ def delete_chunks(chunk_ids: List[str]) -> None:
         return
     native_ids = [_native_id(cid) for cid in chunk_ids]
     resp = requests.post(
-        _collection_url("/points/delete"), headers=HEADERS, json={"points": native_ids}, timeout=30
+        _collection_url("/points/delete?wait=true"), headers=HEADERS, json={"points": native_ids}, timeout=30
     )
     resp.raise_for_status()
 

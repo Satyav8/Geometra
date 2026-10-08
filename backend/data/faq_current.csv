@@ -1,14 +1,14 @@
 category,question,answer
 others,"What is Geometra, in one line?","Geometra is an image-to-CAD system that allows you to measure your space, such as wall elevations, directly from photos taken with your phone by following the system's provided instructions."
-others,How does it actually work — step by step?,"1. Place Marker: Put the Geometra marker on any surface to create a reference point. 2.Take Photo: Take a photo where you can clearly see the wall edges and at least three corners. 3.Measure: Instantly measure the wall through Geometra's interface, supported by robust backend processing and precise accuracy."
+others,How does it actually work — step by step?,Put the Geometra marker on the surface you want to measure to create a reference point
 others,"Do I need any special hardware, scanner, or laser device?","1. Printing the Marker: A laser printer is preferred. Be sure to follow the instructions, keep in portrait mode and maintain a custom scaling of 100% and let the margin be None. 2. Taking Photos: No specialized camera or high-end smartphone is required; any standard phone will work. 3. Geometra Interface: Since Geometra is a web-based application, it can be used on any standard PC, laptop, or desktop computer."
-About the Geometra website,"Do I have to download an app, or does it work in a browser?","Geometra functions completely as a web-based application without any necessary downloads, allowing it to be utilized on any standard desktop computer, laptop, or PC."
-others,What do I get at the end — what does the output look like?,"1. Wall Elevations: CAD wall elevation outputs are provided in DXF and PDF formats.
+About the Geometra website,"Do I have to download an app, or does it work in a browser?","desktop computer, laptop, or PC. Isnt desktop computer and PC is same thing"
+Exporting and saving,What do I get at the end — what does the output look like?,"1. Wall Elevations: CAD wall elevation outputs are provided in DXF and PDF formats.
 2. Image Measurements: Measurements overlaid on the original image background are provided in PNG and PDF formats."
 others,Is this a floor-plan tool or an elevations tool (or both)?,"Geometra functions as an elevations tool, providing wall elevations with a precision of 99%+."
 others,"How accurate is it? What does ""99% accurate"" mean in mm?","Right from your first image capture, Geometra ensures an accuracy of 99%+. For instance, a 1000mm measurement in length or width might have a variance of + or - 10mm."
 others,Can I trust these measurements for real client work / fabrication?,"With an accuracy rate of over 99%+, Geometra provides dependable measurements that can be safely relied upon for professional client projects and fabrication."
-others,What happens if a measurement is wrong — can I verify it?,"Geometra ensures an accuracy of 99%+. However, you can verify the measurements by measuring tape or a laser manually."
+Measuring and editing,What happens if a measurement is wrong — can I verify it?,"Geometra ensures an accuracy of 99%+. However, you can verify the measurements by measuring tape or a laser manually."
 How to take pictures,"When does accuracy drop (lighting, angle, distance)?","Ensure the Geometra marker is applied flatly without any folds, creases, or bumps, and that all four corners are securely adhered. When capturing the image, verify that wall edges are distinct and minimum of three corners are captured  properly. We can only measure what is visible, so confirm that any target element you wish to measure is fully visible in the photograph."
 others,Has it been tested against a laser measure or a real survey?,"Yes, we have rigorously tested and verified our tool with laser measure in a real survey."
 About geometra marker,What's the largest / smallest wall it can measure accurately?,"Various sizes of Geometra markers are available to suit different wall dimensions: 1. A5 size, tailored for highly confined areas which can be upto 2m(e.g., washbasins); 2. A4 size, the standard option widely utilized for typical home and office walls which can be upto 5m; 3. A3 size, designed for larger surfaces such as clubhouses and warehouses which can be upto 7m."
@@ -21,8 +21,8 @@ About geometra marker,What if the marker is slightly bent / dirty? Do I need to 
 How to take pictures,How many corners/edges of the wall need to be visible?,"For example, if you are photographing a rectangular wall, you must ensure at least three of its corners are clearly visible in your photo for the system to process the measurement.(If its N number of sides, then N-1 corners must be visible)."
 How to take pictures,"Can I measure a whole room, or is it one wall at a time?","With the Geometra elevation version, we can measure one wall at once."
 How to take pictures,"Can I measure ceilings and floors, or only walls?","We can measure any area that is clearly visible in the photograph. Make sure the area you want to measure is fully visible, and follow all the instructions given on the website."
-purchasing of geometra,How much does it cost?,We are priced at 199/- per wall.(with all measurements and DXF elevation)
-purchasing of geometra,"What's included in the Free plan, and what are its limits? Tell me all plans",Free Plan: Measure up to 3 wall elevations and download them with no strings attached. Paid Plan: A single simple plan priced at 199/- per wall elevation.
+purchasing of geometra,How much does it cost?,We are priced at 199/- per wall in India(with all measurements and DXF elevation)
+purchasing of geometra,"What's included in the Free plan, and what are its limits? Tell me all plans",Free Plan: Measure up to 3 wall elevations and download them with no strings attached. Paid Plan: A single simple plan priced at 199/- per wall elevation in India.
 purchasing of geometra,"Is there a free trial, before I pay?",Yes there is a free trail.Measure up to 3 wall elevations and download them with no strings attached.
 purchasing of geometra,Can I get a refund if a scan fails or a measurement is wrong?,Refer our refund policy.
 how to upload,What happens to the photos I upload — are they stored?,The images will be stored and be processed as according to our privacy and data policy.
@@ -54,34 +54,33 @@ How to take pictures,What if the room is dark or has strong shadows — do I nee
  Glare: Reposition or adjust lights to eliminate bright reflections on the wall.
  
  Rule of thumb: If the marker and wall edges look sharp on your screen, the measurement will work."
-others,Can I edit the DXF file after downloading it? Which software opens it?,"Yes, the DXF file is a standard CAD format. It opens in AutoCAD, BricsCAD, DraftSight, LibreCAD, SketchUp (with plugin), Rhino, ArchiCAD, and Revit. The file provides a clean, editable line drawing that is not locked or flattened."
-others,"Does the DXF include dimensions and annotations, or just the line drawing?","The DXF includes both line drawings and key dimensions in millimetres, as well as openings like doors and windows. Everything is placed on editable layers so you can toggle annotations on or off."
-purchasing of geometra,Can I buy scans in bulk? Is there a volume discount for studios or firms?,Yes. Beyond the INR 199 + taxes per-scan rate. For many queries contact : contact@geometra.in or visit [geometra.in/pricing].
+Exporting and saving,Can I edit the DXF file after downloading it? Which software opens it?,"Yes, the DXF file is a standard CAD format. It opens in AutoCAD, BricsCAD, DraftSight, LibreCAD, SketchUp (with plugin), Rhino, ArchiCAD, and Revit. The file provides a clean, editable line drawing that is not locked or flattened."
+Exporting and saving,"Does the DXF include dimensions and annotations, or just the line drawing?","The DXF includes both line drawings and key dimensions in millimetres, as well as openings like doors and windows. Everything is placed on editable layers so you can toggle annotations on or off."
+purchasing of geometra,Can I buy scans in bulk? Is there a volume discount for studios or firms?,Yes. Beyond the INR 199 + taxes per-scan rate in India. For many queries contact : contact@geometra.in or visit [geometra.in/pricing].
 purchasing of geometra,What payment methods are accepted?,"We accept UPI (Google Pay, PhonePe, Paytm), debit/credit cards (Visa, Mastercard, RuPay), Net Banking, and digital wallets. NEFT/bank transfers are available for enterprise accounts upon request."
 About the Geometra website,"Does it work on a mobile browser, or only on a desktop/laptop?","Geometra is optimised for desktop and laptop browsers. Recommended workflow: take photos on mobile, then upload and process on desktop."
 how to upload,What internet speed or connection do I need to upload photos?,"A standard 4G or broadband connection is sufficient. Photos are typically 3-8 MB, uploading in seconds even on 5 Mbps connections. Note: Internet connection is required as processing happens on cloud servers."
 how to upload,Is there a file size limit for uploaded photos?,"Yes, the maximum file size per photo is [10 MB]."
 how to upload,Can Geometra staff view my uploaded photos? Who has access to them?,"Photos uploaded to Geometra are private. Only authorized Geometra staff can access user photos when necessary to provide support, troubleshoot issues,training or maintain the service. Other staff members cannot view these files unless access is specifically granted for a support request. Images are not shared with third parties without the user's permission, except where required by law."
 how to upload,How long are my photos and files stored? Can I delete them?,We retain uploaded photos for up to 6 months before automatic deletion. You can also manually delete scans from your account dashboard at any time for immediate removal.
-others,Can I share my Geometra output directly with a client or contractor?,Yes. You can export DXF/PDF files directly or share a view-only link that lets recipients review measurements without needing an account.
+About the Geometra website,Can I share my Geometra output directly with a client or contractor?,Yes. You can export DXF/PDF files directly or share a view-only link that lets recipients review measurements without needing an account.
 About the Geometra website,Can multiple team members access the same account or project?,No.
 how to upload,"Does Geometra work offline, or do I need internet on-site?","You can take photos offline on-site. Once back online, upload the photos to your desktop browser to process measurements. Processing requires an active internet connection."
 How to take pictures,"Does it work on curved walls, or irregular surfaces?","Geometra is designed for flat, rectangular walls (99%+ accuracy). Curved walls or arches results in reduced accuracy due to planar geometry assumptions, so use those outputs for reference only."
 How to take pictures,Does it measure door and window openings within a wall?,"Yes. Make sure the entire door frame or window opening is clearly visible in the photo. Geometra will use the visible opening, i.e., the corners, to measure and show its dimensions in the final output."
-About the Geometra website,What's the turnaround time if a scan fails and I raise a support request?,"We respond within 24 hours on working days (Mon-Sat, 9 AM-6 PM IST). Technical processing errors will result in account credits or automated re-runs within the same business day."
+About the Geometra website,What's the turnaround time if a scan fails and I raise a support request?,"We respond within 24 hours on working days (Mon-Fri, 9 AM-6 PM IST). Technical processing errors will result in account credits or automated re-runs within the same business day."
 Pasting marker,Can I paste the marker tilted?,"No, you should stick the marker straight up, aligned with the arrow printed on it."
-How to take pictures,Can we take image having humans in the frame?,Avoid having humans in the frame while taking picture.
+How to take pictures,Can we take image having humans in the frame?,"We are not recommending having humans in the frame, but you can hold it firmly against the wall and take photos. If the marker is not held  straight and firm, it will lead to inaccurate measurements."
 how to upload,What all should be checked before uploading the picture?,We need to ensure that the marker is pasted correctly and the photo is captured according to the instructions provided on the Website. Upload the Picture ensuring same size & resolution during the original capture . Compressed picture will give incorrect measurements
 How to take pictures,Can I measure sockets?,"Yes, The socket will be measured if it is captured in the image of the wall that has 3 corners clearly visible."
 others,Can I use geometra to measure external walls?,"No, Geometra is designed specifically for measuring interior walls and surfaces."
-Pasting marker,Can I take a picture and get measurements without sticking the marker to the wall ?,"No, the Geometra marker must be pasted on the wall before taking the photograph."
+Pasting marker,Can I take a picture and get measurements without sticking the marker to the wall ?,"We are not recommeding it but you can hold it firmly against the wall and take photos. If the marker is not held  straight and firm, it will lead to inaccurate measurements."
 others,"I want to measure a wardrobe, to know if it will fit in my room or not?","Of course, you can measure your wardrobe. Simply stick the Geometra marker on it and take a photo, ensuring that at least three corners and all relevant details are clearly visible."
-Pasting marker,Can I place different Geometra Marker sizes on the same wall?,"Depending on the size of the wall, same marker should be used. follow this
+Pasting marker,Can I place different Geometra Marker sizes on the same wall?,"To use more than one Geometra marker , there should be different planes which may have noticiable different depth . Here more than one marker should be used .Depending on the size of the wall, same marker should be used. follow this
 The Geometra marker is available in 3 sizes:
 12 cm (A5) — for surfaces up to 2m
 18 cm (A4) — for surfaces larger than 2m and up to 5m
-25 cm (A3) — for surfaces larger than 5m and up to 7m
-To use more than one Geometra marker , there should be different planes which may have noticiable different depth . Here more than one marker should be used"
+25 cm (A3) — for surfaces larger than 5m and up to 7m"
 About geometra marker,"During rectification / area selection for measurement, can more than one Geometra Marker be included in a single separate plan?","No, each separate plane should have only one Geometra marker."
 How to take pictures,Can I measure transparent and reflective glass doors/windows?,"No, transparent or reflective surfaces cannot be measured accurately."
 How to take pictures,Can I take photos using Wide-Angle mode?,"Yes, it should be within the 0.9x-0.6x."
@@ -90,10 +89,18 @@ How to take pictures,Can I take close-up photos using Panaroma mode?,"No panoram
 How to take pictures,What all should be checked before taking a picture?,"Check Geometra Marker placement and printing, and take photos as per the instruction on the Website"
 others,Can we measure the furniture?,"It depends on the furniture type. If it's a wardobe or any rectangular furniture, It will work. But if we didnt get any straight plane to stick marker to find the measurement, then it cannot."
 How to take pictures,Can we measure the staircase?,"No, staircase cant be measured."
-Pasting marker,"Can I place geometra marker between different planes, can I get measurement accurately?","No, don't place each marker between depths. Pasting in between will give you an inaccurate measurement."
+others,Can I place geometra marker between two different planes and get accurate measurements?,"No, don't place each marker between depths. Pasting in between will give you an inaccurate measurement."
 How to take pictures,Can I measure the rooms which is more than 5 sides ?,"Yes you can measure, But it should be closed surface and also should have more than 4 points in the picture"
 How to take pictures,Can I measure the wall with more than 5 depths?,We can measure the wall with any number of depths if we have markers pasted on it straight on each plane.
-Pasting marker,"If I don't paste the marker, but hold the marker which is looking like pasted to the wall. Will i get accurate measurements?","NO, to get accurate measurements , the marker should be pasted on the wall , this will help to give accurate measurments. Avoid holding the marker in hand while taking the photo."
+Pasting marker,"If I don’t paste the marker to the wall but hold it against the wall so that it looks pasted, will I still get accurate measurements?","Yes. You can get accurate measurements as long as the marker is held flat against the wall, just as it would be if it were pasted.
+
+Make sure that:
+
+There are no gaps or air bubbles between the marker paper and the wall.
+The marker is flat and not tilted or bent.
+The marker is clearly visible and in focus in the photo.
+
+If the marker has bubbles, gaps, is tilted, bent, or is not clearly visible, the measurements may not be accurate."
 How to take pictures,What should be the resolution of the images?,"The resolution of the image that is uploaded on the Geometra site, should have the same resolution of the image taken through the phone or the camera. This will help to give correct measurements ."
 how to upload,Is it possible for me to upload images through whatsapp or Telegram?,"No , because the images on WhatsApp or Telegram compresses the original picture size."
 How to take pictures,"Is it possible for me to use any camera, does the quality of the image matter?",You can use any camera as long as it captures the details clearly.
@@ -104,21 +111,117 @@ About the Geometra website,how can I reach out to geometra team?,You can reach o
 purchasing of geometra,How credit system work in geometra? How credit will be deducted?,It will be updated soon.
 purchasing of geometra,How I can get free credits in Geometra?,It will be updated soon.
 Pasting marker,How to paste Geometra marker so that it will not ruin the wall?,Using masking/abro tape recommended by geometra
-Pasting marker,Which kid of tape can be used for stick the marker?,Masking / abro tape or tapes reccomended by geometra
-How to take pictures,Can i measure a tomb?,Geometra cannot measure circular or curved indoor walls  i.e It can only measure the regular closed polygon walls.
+Pasting marker,What kind of tape can be used for stick the marker?,Masking / abro tape or tapes reccomended by geometra
+How to take pictures,Can i measure a tomb?,It can only measure the closed polygon walls.Geometra cannot measure circular or curved indoor walls.
 How to take pictures,"I have put marker on the wall, whenever I try to capture, the marker is glossy while capturing ,is it okay?","No, you will not get accurate measurements. Avoid glare on the geometra marker to get accurate detection and measurements."
 About geometra marker,Can I measure the wall without marker?,"No, the Geometra marker must be pasted on the wall before taking the photograph. Geometra Marker is important for getting the reference point."
 Printing marker,"Is it important that geometra marker which is printed in A4 to be 18cm, A3 to be 25cm, A5 to be 12cm?","Yes, it is important that A4 marker to be 18cm, A3 marker to be 12 cm, A5 marker to be 25cm."
-How to take pictures,Can I measure the swimming pool?,Geometra cannot measure circular or curved indoor walls  i.e It can only measure the regular closed polygon walls. A swimming pool can be measured without water in it
-others,"My window is also there on the wall, which is covered by curtains , so can I measure window if the 3 corners of wall is visible?","To get accurate measurements, draw the curtains, keep the window in the picture & ensure 3 corners are visible, Point, shoot and capture the image!"
+How to take pictures,Can I measure the swimming pool?,It can only measure the closed polygon walls. Geometra cannot measure circular or curved indoor walls; i.e A swimming pool can be measured without water in it
+Measuring and editing,"My window is also there on the wall, which is covered by curtains , so can I measure window if the 3 corners of wall is visible?","To get accurate measurements, draw the curtains, keep the window in the picture & ensure 3 corners are visible, Point, shoot and capture the image!"
 others,Can i get 3d drawing from geometra?,"No, you will get 2d dxf file of the wall elevation."
-How to take pictures,Is that ok if i took photos of the wall with marker in low light?,Yes as long as corners and details of walls are clearly visible. Avoid taking pictures at night & extreemly dim light as it will blur the picture.
-Pasting marker,Is it ok i paste the marker in photoshop or any editing tool and upload?,"No, marker should be pasted in real time"
+How to take pictures,Is that ok if i take photos of the wall with marker in low light?,Yes as long as corners and details of walls are clearly visible. Avoid taking pictures at night & extremly dim light as it will blur the picture.
+how to upload,Is it ok if i paste the marker in photoshop or any editing tool and upload?,"No, marker should be pasted in real time"
 Pasting marker,Can I  stick the marker on a curved wall?,Geometra can't measure curve walls
-About geometra marker,Does geoemetra has USA sizes?,We have Geometra markers designed for standard US paper sizes. Each paper size has a specific marker size and measurement range. Ledger (11 × 17 inches / 27.94 × 43.18 cm)uses a 25 cm marker and can measure walls up to 7 m. Letter (8.5 × 11 inches / 21.59 × 27.94 cm) uses an 18 cm marker and can measure walls up to 5 m. Half Letter (5.5 × 8.5 inches / 13.97 × 21.59 cm) uses a 12 cm marker and can measure walls up to 2 m. Ensure you select and print the marker that matches the paper size you are using.
+About geometra marker,Does geoemetra has USA sizes?,Yes.We have Geometra markers designed for standard US paper sizes. Each paper size has a specific marker size and measurement range. Ledger (11 × 17 inches / 27.94 × 43.18 cm)uses a 25 cm marker and can measure walls up to 7 m. Letter (8.5 × 11 inches / 21.59 × 27.94 cm) uses an 18 cm marker and can measure walls up to 5 m. Half Letter (5.5 × 8.5 inches / 13.97 × 21.59 cm) uses a 12 cm marker and can measure walls up to 2 m. Ensure you select and print the marker that matches the paper size you are using.Y
 How to take pictures,Can geometra measure partially visible objects?,NO
 Printing marker,Can I take printout from a shop somewhere ?,"You can print the Geometra marker yourself at home/office, or get it printed at any external print shop or printing service — just make sure the print settings match the instructions (laser printer preferred, portrait orientation(mandatory), 100% scale(mandatory), no resizing(mandatory)). Geometra will not specify or recommend any particular print shop or location in your area — finding a shop and confirming it can meet these settings is on you. The one thing to strictly avoid is quick-commerce/e-commerce platforms like Zepto, Blinkit, or Instamart — their print settings often don't preserve the required scale"
 How to take pictures,What kind of windows I can measure?,"Geometra can measure most kinds of windows; however, it does not support curved walls or curved windows."
 Pasting marker,Why should I not use geometra on wet walls?,"You can use the Geometra marker on a wet surface, but it is not recommended to paste it, as the tape may not stick properly. Instead, ensure the marker is straight and held firmly against the dry wall."
 About geometra marker,"Can Geometra measure objects that are smaller than the selected marker, where the marker cannot be placed on the object?","Generally, the object or space being measured should not be smaller than the selected marker. However, electrical outlets, sockets, AC fitting outlets, and photo frames can still be measured even when the marker cannot be placed on them, as long as they do not have a noticeable depth difference from the wall."
 About geometra marker,Where can I get the geometra marker?,"You can print the Geometra marker yourself at home/office, or get it printed at any external print shop or printing service — just make sure the print settings match the instructions (laser printer preferred, portrait orientation, 100% scale, no resizing). Geometra will not specify or recommend any particular print shop or location in your area — finding a shop and confirming it can meet these settings is on you. The one thing to strictly avoid is quick-commerce/e-commerce platforms like Zepto, Blinkit, or Instamart — their print settings often don't preserve the required scale"
+About the Geometra website,Where can I find the geometra marker to donwload in website?,"After signing up, Geometra takes you to the Marker page, where you can download the required marker in A4, A5, A3 sizes. We also have in US Ledger, Letter and Half Letter sizes."
+how to upload,How can I upload photo after downloading the marker?,"After downloading and printing the marker, you can find the Next button on the right side of the Download button. Click Next to go to the Library  where you can upload your image."
+others,Which marker sizes can I choose from the MARKER SIZE dropdown?,"You can find the A3, A4, and A5 markers. You can select them according to the specific wall and download it."
+how to upload,How should I transfer a photo from my phone to the computer?,"First, take pictures of the wall. Then, transfer all the images to your computer via email or any other medium that does not compress or resize the files. Download the images to your computer and upload them directly to Geometra using the Upload Images button."
+how to upload,Why should I avoid messaging apps before uploading?,Because compression can change the image and Geometra needs the exact size and dimensions captured by the camera.
+how to upload,Where do I upload a photo for measurement?,"Go to Home in the Geometra workspace, click Upload Image, select the file, and upload the image."
+how to upload,Why did I get the Upload Incomplete dialog after uploading image ?,"When the geometra marker is not detected in the image or if the marker is not present in the image, then Upload Incomplete dialog box appears."
+how to upload,What to do when I get Upload Incomplete dialog box?,"When the geometra marker is not detected in the image, or if the marker is not present in the image, then the Upload Incomplete dialog box appears. So retake the photo of wall so that marker is visible and upload it in home."
+how to upload,What happens if Geometra cannot detect a marker in my uploaded photo?,The upload is rejected outright with an error saying that no marker was detected.
+others,Will Geometra silently process an image when no marker is detected?,No. It rejects the upload and shows a marker-not-detected error.
+About the Geometra website,What should I do after an image is accepted?,A blue dialog box will appear when you click on the image. Then click Start Measurement to get measurements of image.
+About the Geometra website,What does the Home page show?,It shows all images you have uploaded to Geometra.
+About the Geometra website,What is the Projects section used for?,"It organizes images into folders for different projects, jobs, sites, or clients."
+About the Geometra website,How do I create a project folder?,"Click Projects on the right-side panel of the website. Then click + Add Folder on the right side of the page. Enter your desired folder name, and click Create or Save to create the folder."
+About the Geometra website,What happens after I create a folder?,"The new folder appears in the Projects section, and you can double-click it to view its images."
+About the Geometra website,Can I create a folder inside another folder?,Yes. Using + Add Folder inside the current folder; folders can be nested as needed.
+how to upload,How can I upload an image directly into the folder I am viewing?,"Click the folder where you want to add the image, then click + Add Image. A page will open showing all the images available in Home. Select the image you want to add, and it will be uploaded to the selected folder."
+About the Geometra website,What is the image thumbnail folders which are there in Home ?,The folders that have rectified scans of the wall image will have image thumbnail. These cannot be edited.
+About the Geometra website,Why is there an image thumbnail in some folders of library?,"Folders that contain rectified wall scans will show an image thumbnail. This means the image has already been rectified and worked on. If you come back later to work on the same wall image or modify its measurements, you can open the rectified scan and continue working from where you left off, including the previous measurements and drawings created on the rectified wall surface."
+About the Geometra website,Can we rename the rectified images or scans in the image thumbnail folders?,"No, we cannot rename the rectified images, but we can delete those images.The delete button appears when you click the image."
+About the Geometra website,Can we delete or rename the images in home or library?,Yes. You can rename it to your desired name and also can delete it by clicking the image.
+others,Can Geometra automatically detect the marker size without requiring me to select it when I click “Start Measurement”?,"Yes, Geometra automatically detects the marker size when you select the image. However, it’s always better to double-check the detected size before clicking “Start Measurement.”"
+About the Geometra website,Can I download the images or folders from library or home?,"No, we cannot download the images or folders from library or home."
+About the Geometra website,"Can I cut, copy, and paste images into folders, as I do in my laptop’s File Explorer?","Yes. You can right-click the image and select “Cut” from the options. Then, right-click the folder where you want to move the image and select “Paste.” The image will be moved to that folder."
+About the Geometra website,Can I work together or collaborate with my friends on the same folders or images?,"No, you cannot share your folders or images. We don't have this feature now."
+About the Geometra website,When does Projects appear in the sidebar on my account?,"Only after the upload of at least one image, the project appears in the sidebar of your account."
+others,Why does Geometra separate an image into planes?,"Different surfaces has different orientations, size  and perspectives, so each plane is processed and measured independently to get measured accurately."
+Measuring and editing,Does Geometra's detected points decide the final plane selection for me?,No. The detected points are visual guidance with which you can draw the lines and rectify the planes.
+Measuring and editing,Where should I place boundary points when separating a surface?,Place them along the visible boundary of the surface and keep every point carefully as each wrong point can lead to inaccurate measurements.
+Measuring and editing,Am I limited to four points when defining a plane?,No. You can use more points when the boundary is irregular or not a clean rectangle.
+Measuring and editing,I used three points to define the boundary of the plane. But my extract plane button is not working.,You need to use equal or greater than 4 points to describe an irregular boundary more accurately. Extract plane button works only when this criteria is satisfied.
+About the Geometra website,Can I use UNDO or REDO using keyboard shortcuts ?,Yes. You can work with UNDO and REDO keyboard shortcuts.
+Measuring and editing,What I want to do to erase the boundary lines I drew in rectification?,"You want to use the ""CLEAR ALL"" button from the ribbon."
+others,What does EXTRACT PLANE do?,"By clicking ""EXTRACT PLANE "", It will extract the plane which you want to measure."
+About the Geometra website,What does the SURFACE N panel show?,"It shows all planes that have already been extracted, with a thumbnail. When you click on them, you can see their boundaries."
+Measuring and editing,What if I draw the wrong boundary and extract the surface? Can I redo it by clicking on the extracted surface?,"No, you cannot redo it . But you can delete the extracted plane and draw the boundary again."
+About the Geometra website,Why did I get the pop-up called Rectification failed after I clicked extract plane?,The“Rectification Failed” pop-up appears only when the marker is not detected in the selected region. So draw the boundary again and ensure the marker is covered in the boundary of the region.
+others,What does BOUNDARY POINTS N CAPTURED show?,The live count of boundary points on the surface you are tracing will be captured in boundary points N.
+Measuring and editing,"After extracting the planes , what I should  to do next?","You want to click on ""NEXT"" button which is at the left down corner of the website . It will leads to measurement workspace where you can start measuring."
+About the Geometra website,Can I download the marker even after uploading the images or creating folder?,"Yes, you can navigate to the Marker page by clicking the marker icon on the left panel of the Workbench page. When you click the icon, it will open the Marker page, where you can download the marker."
+Measuring and editing,"After extracting the planes , what I should  do next?","You want to click on ""NEXT"" button which is at the left down corner of the website . It will leads to measurement workspace where you can start measuring."
+About the Geometra website,I extracted the wall from the image and clicked the Next button. I was then taken to a page with an extracted wall image. What should I do now?,"The page you landed on is the Measurement Workspace, where you can start measuring the wall using our tools. You can begin by using Guide Points can help you to draw boundary measurements for the object you want to measure. Alternatively, you can use Draw Line to manually draw the measurement without Guide Points too."
+How to take pictures,What should I do if an object blocks part of a wall?,You can trace around the object's outline and then click EXTRACT PLANE. The hidden area will appear as a gap in the flattened wall.
+How to take pictures,Should I guess the hidden corner behind an object?,No. The guessing work cannot lead to accurate measurement. So draw the boundary around the corners which is visible.
+About the Geometra website,What happens when I click Extract Plane?,Geometra checks the geometry mathematically before accepting the result. If the marked space doesn't have marker. It will be rejected.
+Pasting marker,What if there is no point on the corners of the wall?,"The corners serve as anchor points that help you draw the boundary accurately. If a corner is not detected, you can click on the corner to manually add a point and use it to draw the boundary."
+Measuring and editing,What should I do if plane separation fails?,You should reselect the points and draw the boundary to extract the wall. Ensure the marker is inside the shaded region and the boundary is drawn precisely.
+Measuring and editing,Why should I not mix two surfaces in one plane selection?,"Each plane has it own depth and perspective. If two planes are selected together, it leads to inaccurate measurements."
+How to take pictures,Can I separate more than one plane from the same photo?,"Yes. After separating the first plane, you can draw the boundary of the second plane and click Extract Plane. The second plane or section of the wall will then be extracted."
+About the Geometra website,What should I review before clicking Next?,"Yes, review each required plane to ensure it represents the correct area."
+Exporting and saving,What can cause extraction to fail?,"If the marker is not covered in the plane, it will lead to failure of extraction of the plane."
+others,What does a marker-not-detected condition mean for measurements?,"It means the marker was not stuck properly on the wall, or the image is not captured according to the guidelines mentioned in website."
+About the Geometra website,What are the main areas of the Geometra measurement workspace?,There are three main areas of Geometra measurement workspace. Left: drawing and geometry tools. Center: the main canvas. Right: information and control panels.
+About the Geometra website,Iwhere can I change my measurement units?,"There is a right icon ""UNITS"" which is above the drawing space. We have a measurement units drop down from which we can select the units."
+Measuring and editing,Can I change the measurement unit after I start drawing?,"Yes. You can change it at any time, and displayed values update automatically."
+others,What does Guide Point do?,"It displays Geometra's detected points over the surface as references for accurate tracing. If the points are not detected in corners, then you can mark a point and draw the boundary."
+others,Do I must use Guide points for drawing?,No. They assist you to draw lines but it's not compulsory to use.
+Measuring and editing,What if there is no suitable guide point where I need a line?,We can place the points manually if there is no suitable guide point.
+Measuring and editing,How do I create a line?,Click on Draw Line to draw the measurement drawings or you can select guide points which automatically selects the Draw Line too.
+others,What is Select Lines used for?,"It lets you select existing drawings so you can inspect, modify, or delete it. It has JOIN,CURVE, DELETE actions."
+About the Geometra website,What does Undo do in the workspace?,It reverses the last action.
+About the Geometra website,What does Redo do?,It restores the action that was just undone.
+About the Geometra website,What does Unselect do?,It removes the selection from the currently selected line or lines.
+About the Geometra website,What does Delete do?,It removes the selected line or lines from the surface.
+About the Geometra website,What does Join do?,"It connects selected lines into a single line drawing. But if we selects two parallel lines, it never joins."
+About the Geometra website,When does Join become available?,"When two lines are selected, join action will be activated or if you right click, you will get the join options."
+Measuring and editing,What happens if I try to Join two lines running in the same direction?,"They do not meet, so the app refuses the Join operation."
+others,Why should I draw each edge as long as the visible wall allows?,A longer line gives Join a more accurate direction.
+About the Geometra website,What does Curve do under Select?,It converts two or more selected lines into a curved line.
+Measuring and editing,How do I trace an arched doorway on a flat wall?,Use Draw Curve to trace the curved element; Geometra fits an accurate arc. If not draw the lines around the curve and then select the area which has the those lines. Then you can click on curve in ribbon or right click and select curve.
+others,Can Draw Curve measure a curved wall?,"No. It is for curved elements on an otherwise flat wall, not for curved walls themselves."
+others,What does Smart Parallel/Perpendicular do?,It creates mathematically parallel and perpendicular lines.
+others,Why is Smart Parallel/Perpendicular useful?,It helps correct perspective distortion when true right angles appear skewed in a photo.
+others,Where is Smart Parallel/Perpendicular especially useful?,It is used for square-built elements such as door and window openings.
+others,Should I use Smart Parallel/Perpendicular on a genuinely out-of-square wall?,No. The manual says not to force it onto something genuinely out of square.
+About the Geometra website,Where can I switch between separated surfaces?,"In the Sections/Spaces panel icon, which is on the right panel along the side of main image."
+About the Geometra website,What happens when I select a different plane in Sections/Spaces?,The active workspace switches to that surface without leaving the project.
+About the Geometra website,Can I remove a separated plane if I no longer need it?,Yes. You can remove a plane from the Sections/Spaces panel.
+Measuring and editing,What should I do first if a measurement looks incorrect?,"We have an icon called calibration, which is like a compass. Recalibrate the workspace against the marker."
+Measuring and editing,How do I recalibrate the workspace?,"We have an icon called calibration, which is like a compass. Recalibrate the workspace against the marker.Select the appropriate marker size and click Calibrate Workspace."
+Measuring and editing,What happens during recalibration?,Geometra re-detects the marker within that specific plane and re-establishes the scale.
+Measuring and editing,What happens after recalibration finishes?,The surface is re-anchored to the marker's physical reference after the re-calibration completes.
+About the Geometra website,Does the workspace show a status while recalibration is running?,Yes. It shows a calibrating state while the process runs. It shows the processing state for all the processes.
+Measuring and editing,Should I assume the drawing itself is wrong when a measurement looks off?,"Measurements may be inaccurate if the drawing is not precise. Carefully check all the corners and lines you have drawn. Verify the measurements once they are generated. If you still feel the measurements are inaccurate, recalibrate the image and check the results again."
+Measuring and editing,What should I check before exporting the completed surface?,"Check that traced lines follow the real wall structure, especially for missing edges, incorrect connections, or lines that do not represent the surface correctly."
+Measuring and editing,What should I do if I find an incorrect line or connection during final review?,Use the selection and editing tools to fix it before exporting.
+About the Geometra website,Where do I choose the export format?,"Click Save and Export, then Export."
+Exporting and saving,What is vector export?,"It gives the drawing as editable geometric information, such as a DXF, rather than a flat image."
+Exporting and saving,When should I choose vector export?,Choose it when the drawing needs further editing downstream in CAD software.
+Exporting and saving,What does raster export preserve?,It keeps the visual information: the original photo with the extracted surface and measurements overlaid on it.
+About the Geometra website,Which formats are available for raster export?,It is available in PNG or PDF.
+Exporting and saving,Which formats does the manual associate with vector export?,It is available in DXF/PDF.
+Exporting and saving,When should I choose raster export?,Choose it when you want a visual reference showing measurements in context against the original photo.
+About the Geometra website,What should I do after choosing the export format?,"Download the result. After the export completes, close the Save and Export window."
+About the Geometra website,What happens to my project after I close Save and Export?,The project remains available if you need to revisit it.
+purchasing of geometra,What is the cost of per wall in dollars?,It is 4.99 dollars per wall elevation in geometra.

@@ -67,18 +67,39 @@ QDRANT_COLLECTION = os.getenv("QDRANT_COLLECTION", "geometra_faq")
 # The default changed because the sheet was being re-fetched by every ingestion run, so
 # anyone running scripts/ingest_faq.py silently replaced the loaded content with that
 # sheet's current state - which twice reverted a deliberate update within minutes, with
-# nothing to show it had happened. A repo file is versioned and cannot move underneath a
-# running system. The trade-off: updating the FAQ now means editing that CSV, not a
-# spreadsheet.
-FAQ_SOURCE = os.getenv("FAQ_SOURCE", "file")
+# nothing to show it had happened.
+#
+# CHANGED BACK on 2026-10-08, deliberately, with the hazard handled rather than avoided.
+# The team edits a spreadsheet; asking them to edit a CSV in a git repo instead was never
+# going to hold, and a source of truth nobody updates is worse than one that can move. The
+# silent-revert failure mode is now closed by rag/faq_sync.py, which refuses a source that
+# comes back suspiciously empty, skips work when content is unchanged, and reports what it
+# did - so an ingest can no longer quietly replace good content with nothing.
+#
+# data/faq_current.csv is kept, but its role is now a committed SNAPSHOT of what was last
+# deliberately synced: a diffable record and a rollback point, not the live source. The
+# sheet is the source.
+FAQ_SOURCE = os.getenv("FAQ_SOURCE", "sheet")
 FAQ_FILE_PATH = os.getenv("FAQ_FILE_PATH", os.path.join(os.path.dirname(__file__), "data", "faq_current.csv"))
 
 # Google Sheet settings, used only when FAQ_SOURCE=sheet
-FAQ_SHEET_ID = os.getenv("FAQ_SHEET_ID", "1dkd0Qj-6kTc72eXk0UCGFi47RrEP0fiKRAK-jPrFMtA")
-FAQ_SHEET_GID = os.getenv("FAQ_SHEET_GID", "1861055441")
+FAQ_SHEET_ID = os.getenv("FAQ_SHEET_ID", "163VrfrWbndBASavBXa-LLaM1_xjkikI3")
+FAQ_SHEET_GID = os.getenv("FAQ_SHEET_GID", "178212144")
 FAQ_SHEET_CSV_URL = (
     f"https://docs.google.com/spreadsheets/d/{FAQ_SHEET_ID}/export?format=csv&gid={FAQ_SHEET_GID}"
 )
+
+# Floor on how many rows the FAQ source must return before the mirror will write anything.
+# The mirror is authoritative - it removes chunks the source no longer has - so a fetch
+# that parses fine but comes back nearly empty would delete the knowledge base. See
+# rag/faq_sync.py. Sized well under the current row count (99 on 2026-09-29) so ordinary
+# editing never trips it, and well above zero so a broken source does.
+FAQ_MIN_ROWS = int(os.getenv("FAQ_MIN_ROWS", "50"))
+
+# Shared secret for POST /admin/reingest, which the sheet's own trigger calls. Unset means
+# the endpoint is disabled entirely rather than open: it spends money on embedding calls
+# and replaces the live knowledge base, so it must never be reachable by default.
+INGEST_TOKEN = os.getenv("INGEST_TOKEN", "")
 
 # Evaluation
 MIN_COMPLETENESS_WORDS = int(os.getenv("MIN_COMPLETENESS_WORDS", "8"))

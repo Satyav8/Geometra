@@ -1,0 +1,59 @@
+# Hourly safety net behind the spreadsheet's own change trigger.
+#
+# The Apps Script trigger is what makes a new FAQ live within a couple of minutes. This
+# exists because that trigger can fail in ways nobody sees: the script's authorisation
+# expires, someone removes it while tidying the sheet, Google drops a time-based trigger,
+# or an edit arrives while the service is restarting. All of those look identical from the
+# outside - the FAQ simply stops updating, quietly, which is the failure mode this project
+# has been bitten by before.
+#
+# Cheap to run: the service hashes the FAQ content, so an hour with no edits costs one
+# request and writes nothing (see rag/faq_sync.py).
+#
+# Setup - repository Settings -> Secrets and variables -> Actions:
+#   INGEST_TOKEN   the same value set on the Render service
+#   INGEST_URL     https://geometra.onrender.com/admin/reingest
+name: FAQ sync
+
+on:
+  schedule:
+    - cron: "17 * * * *"   # hourly, off the hour: :00 is the busiest slot on shared runners
+  workflow_dispatch:        # so it can also be run by hand from the Actions tab
+
+# A second run starting while one is in flight would just be told "busy" by the service,
+# but there is no reason to spend a runner on it.
+concurrency:
+  group: faq-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger re-ingest
+        env:
+          INGEST_URL: ${{ secrets.INGEST_URL }}
+          INGEST_TOKEN: ${{ secrets.INGEST_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "${INGEST_URL:-}" ] || [ -z "${INGEST_TOKEN:-}" ]; then
+            echo "INGEST_URL or INGEST_TOKEN secret is not set"; exit 1
+          fi
+
+          # Render's free tier sleeps an idle service, so the first request can take ~50s
+          # to cold start. --max-time covers that; a failure here is a real failure.
+          body=$(curl -sS --max-time 180 \
+                   -o /tmp/response.json -w '%{http_code}' \
+                   -X POST "$INGEST_URL" \
+                   -H "X-Ingest-Token: $INGEST_TOKEN")
+
+          echo "HTTP $body"
+          cat /tmp/response.json; echo
+
+          # 200 = synced or unchanged or busy, all fine. Anything else is worth a red X:
+          # 409 means a safety check refused (the bot is now behind the sheet), 401 means
+          # the token drifted, 503 means the service has no token configured at all.
+          if [ "$body" != "200" ]; then
+            echo "::error::FAQ sync returned HTTP $body - the bot may be serving stale FAQ content"
+            exit 1
+          fi
