@@ -8,7 +8,7 @@ from config import APP_ENV, CORS_ORIGINS, DATABASE_BACKEND, VECTOR_DB_BACKEND
 from database import init_db, check_health
 from rag import vectorstore
 from rate_limiter import limiter
-from routers import chat, session, unknown
+from routers import admin, chat, session, unknown
 from startup_checks import validate_configuration
 
 app = FastAPI(title="Geometra Pre-Prototype Chatbot")
@@ -31,6 +31,8 @@ app.add_middleware(
 app.include_router(chat.router)
 app.include_router(session.router)
 app.include_router(unknown.router)
+# Token-protected and disabled unless INGEST_TOKEN is set - see routers/admin.py.
+app.include_router(admin.router)
 
 
 @app.on_event("startup")
