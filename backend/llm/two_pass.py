@@ -1022,7 +1022,19 @@ def is_bare_negation(text: str) -> bool:
 # otherwise-fine answer, including a plain-prose one caught by looks_like_clarify_question()
 # rather than the tagged branch. Also strips internal rule references (e.g. "using Rule 2B
 # ()") left behind after a tag is removed - a customer should never see either.
+# Matches a citation anywhere in a reply: "[Source: Pricing]" or
+# "[Source: Accuracy, Pricing]". Leading whitespace is taken with it, so removing a
+# trailing citation does not leave a dangling blank line behind.
+_CITATION_RE = re.compile(r"\s*\[Source:[^\]]*\]")
+
+
 def clean_leaked_artifacts(text: str) -> str:
+    # Citations are an internal device: the CONTEXT chunks carry "[Source: X]" labels
+    # so the model can tell them apart, and Rule 4 forbids repeating them to the
+    # customer. Stripped here as well, because a prompt rule is an instruction while
+    # this function is the guarantee - the same reason every other leaked tag is
+    # handled here rather than trusted to the prompt.
+    text = _CITATION_RE.sub("", text).strip()
     for tag in ("[CANNOT_ANSWER]", "[CLARIFY]"):
         if tag in text:
             text = text.replace(tag, "").strip()

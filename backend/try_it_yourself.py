@@ -1846,6 +1846,10 @@ def _resolve_turn(query, history, awaiting):
     # customer. Also strips internal rule references (e.g. "using Rule 2B ()") left
     # behind after a tag is removed - a customer should never see either.
     def clean_leaked_artifacts(text):
+        # Internal "[Source: X]" labels must never reach the customer. Rule 4 now
+        # forbids citing, but a prompt rule is an instruction and this is the
+        # guarantee (mirrored from llm/two_pass.py per this file's sync convention).
+        text = re.sub(r"\s*\[Source:[^\]]*\]", "", text).strip()
         for tag in ("[CANNOT_ANSWER]", "[CLARIFY]"):
             if tag in text:
                 text = text.replace(tag, "").strip()
