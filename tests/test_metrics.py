@@ -49,14 +49,19 @@ def test_hallucination_rate_flags_unlisted_numbers():
     assert dirty.passed is False
 
 
-def test_source_citation_accuracy():
+def test_citation_not_leaked():
+    """Replaced test_source_citation_accuracy on 2026-10-09, when citations stopped being
+    shown to customers. The old metric REQUIRED a "[Source: ...]" line on every
+    substantive answer; the new one requires its absence, because the CONTEXT chunks are
+    still labelled that way internally and a label reaching the customer is now the
+    regression worth catching."""
     chunks = [make_chunk(section="Pricing")]
-    valid = metrics.source_citation_accuracy("The price is 199. [Source: Pricing]", chunks)
-    invalid = metrics.source_citation_accuracy("The price is 199. [Source: Accuracy]", chunks)
-    missing = metrics.source_citation_accuracy("The price is 199.", chunks)
-    assert valid.passed is True
-    assert invalid.passed is False
-    assert missing.passed is False
+    clean = metrics.citation_not_leaked("The price is 199.", chunks)
+    leaked = metrics.citation_not_leaked("The price is 199. [Source: Pricing]", chunks)
+    leaked_mid = metrics.citation_not_leaked("The price [Source: Pricing] is 199.", chunks)
+    assert clean.passed is True
+    assert leaked.passed is False
+    assert leaked_mid.passed is False
 
 
 def test_response_conciseness():

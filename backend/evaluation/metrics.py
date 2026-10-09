@@ -108,17 +108,24 @@ def hallucination_rate(response: str, chunks: List[SourceChunk]) -> EvaluationRe
     return _result("hallucination_rate", passed, float(len(unlisted)), f"{len(unlisted)} unlisted numbers found: {unlisted}")
 
 
-def source_citation_accuracy(response: str, chunks: List[SourceChunk]) -> EvaluationResult:
-    if _is_non_substantive(response):
-        return _result("source_citation_accuracy", True, None, "No citation required for fallback/scope response")
+def citation_not_leaked(response: str, chunks: List[SourceChunk]) -> EvaluationResult:
+    """Replaced source_citation_accuracy on 2026-10-09, when citations stopped being shown.
+
+    That metric asserted the OPPOSITE - that every substantive answer carried a
+    "[Source: ...]" line - so leaving it in place would have logged a failure on every
+    good answer from the moment citations were removed. Inverting it under the same name
+    would have been worse: historical rows would silently change meaning, and a chart
+    spanning the change would be nonsense. Hence a new name.
+
+    What it checks now is the thing that can actually go wrong: the CONTEXT chunks are
+    still labelled "[Source: X]" internally, so a citation leaking into a reply is a real
+    regression - and this catches it in production logging rather than in a screenshot.
+    """
     match = CITATION_RE.search(response)
-    if not match:
-        return _result("source_citation_accuracy", False, None, "No [Source: ...] citation found in response")
-    cited = [s.strip() for s in match.group(1).split(",")]
-    valid_sections = {c.section for c in chunks}
-    invalid = [s for s in cited if s not in valid_sections]
-    passed = len(invalid) == 0
-    return _result("source_citation_accuracy", passed, None, f"Cited {cited}; invalid: {invalid}")
+    if match:
+        return _result("citation_not_leaked", False, None,
+                       f"Internal source label leaked to the customer: [Source: {match.group(1)}]")
+    return _result("citation_not_leaked", True, None, "No internal source label in the response")
 
 
 def response_conciseness(response: str) -> EvaluationResult:
@@ -236,7 +243,7 @@ def evaluate_core_metrics(
         answer_faithfulness(response, chunks),
         answer_completeness(query, response),
         hallucination_rate(response, chunks),
-        source_citation_accuracy(response, chunks),
+        citation_not_leaked(response, chunks),
         response_conciseness(response),
         fallback_trigger_rate(session_id),
         false_fallback_rate(chunks, response),
