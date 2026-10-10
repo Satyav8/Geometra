@@ -36,6 +36,20 @@ BUILD_VERSION = _build_version()
 # LLM
 LLM_PROVIDER = os.getenv("LLM_PROVIDER", "groq")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
+
+# How confident the moderation API must be before its flag causes a hard safety refusal.
+#
+# Its boolean `flagged` fires on ordinary product questions: "I want to shoot the wall
+# from further back" (violence 0.36), "I want to kill the shadow on the wall" (0.56),
+# "can I shoot from the hip to get the whole wall" (0.21). Measured against real abuse,
+# which scores 0.80 to 0.98, the two populations separate cleanly - so the boolean throws
+# away exactly the information that tells them apart.
+#
+# 0.70 sits in the gap: 0.14 above the highest benign score measured, 0.10 below the
+# lowest abusive one. This only ever ignores a flag, never adds one, and moderation
+# remains one layer of three - the slur wordlist runs before it and Pass 2's SAFETY rule
+# after it.
+MODERATION_SCORE_THRESHOLD = float(os.getenv("MODERATION_SCORE_THRESHOLD", "0.70"))
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")

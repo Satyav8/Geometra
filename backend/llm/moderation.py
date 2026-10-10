@@ -11,7 +11,7 @@ content in adversarial test sets, and it has no dedicated "extremism" category (
 into hate/illicit). It's one layer of three - the wordlist, this, and Pass 2's own SAFETY
 rule - not a replacement for any of them.
 """
-from config import OPENAI_API_KEY
+from config import MODERATION_SCORE_THRESHOLD, OPENAI_API_KEY
 
 MODERATION_MODEL = "omni-moderation-latest"
 
@@ -49,7 +49,33 @@ def is_flagged_by_moderation(text: str) -> bool:
         return False
     try:
         response = _get_client().moderations.create(model=MODERATION_MODEL, input=text)
-        return bool(response.results[0].flagged)
+        result = response.results[0]
+        scores = result.category_scores.model_dump()
+        return is_confidently_flagged(bool(result.flagged), scores)
     except Exception as e:
         print(f"[moderation] check failed, continuing without it: {e}")
         return False
+
+
+def is_confidently_flagged(flagged: bool, category_scores: dict) -> bool:
+    """Whether a moderation result should cause a hard safety refusal.
+
+    Separated from the network call so the decision can be tested directly - the
+    threshold is the part that can be wrong, and it should not need an API key and a
+    live call to verify.
+
+    The API's own boolean fires on ordinary product questions. Measured: "I want to shoot
+    the wall from further back" (violence 0.36), "I want to kill the shadow on the wall"
+    (0.56), "can I shoot from the hip" (0.21) are all flagged; real abuse scores 0.80 to
+    0.98. So the flag is honoured only when the strongest category also clears
+    MODERATION_SCORE_THRESHOLD.
+
+    Never turns an unflagged result INTO a flag: a message the API did not flag at all is
+    still not flagged here, whatever its scores.
+    """
+    if not flagged:
+        return False
+    if not category_scores:
+        # Flagged but no scores to judge by - trust the API rather than second-guessing it.
+        return True
+    return max(category_scores.values()) >= MODERATION_SCORE_THRESHOLD
