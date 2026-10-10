@@ -22,6 +22,7 @@ from llm.measurability import classify_measurability, reason_for
 from llm.printer_classifier import classify_printer_type
 from llm.translation import is_non_latin_script, localize, needs_translation, to_english
 from llm.source_labels import strip_source_labels
+from llm.two_pass import refuses_the_subject
 from llm.multilingual_profanity import (
     ALL_TERMS as MULTILINGUAL_PROFANITY_TERMS,
     contains_native_script_profanity,
@@ -1372,7 +1373,8 @@ def understand(query, history):
     return reformulated, intent
 
 
-def answer_pass(original_query, intent, chunks, confidence, hedge_retry=False, already_clarified=False, cap_retry=False, answer_now_retry=False):
+def answer_pass(original_query, intent, chunks, confidence, hedge_retry=False, already_clarified=False, cap_retry=False, answer_now_retry=False,
+                known_measurable=False, measurable_retry=False):
     # No raw conversation history here, by design - the diagram only feeds history into
     # Pass 1. Pass 2 relies on Pass 1's distilled intent summary instead, so this
     # actually tests whether Pass 1's reformulation carries enough context on its own.
@@ -1434,8 +1436,24 @@ def answer_pass(original_query, intent, chunks, confidence, hedge_retry=False, a
         "clarifying question if their message genuinely does not say what they are asking "
         "about at all.\n" if answer_now_retry else ""
     )
+    # Mirrored from llm/two_pass.py: a "measurable" verdict is a decision, not a
+    # hint. Without these, Pass 2 refuses a wall because something unmeasurable is
+    # standing next to it - see that file for the measurements behind the wording.
+    measurable_note = (
+        "\nNOTE: a separate capability check has already confirmed that the thing "
+        "this customer is asking to measure IS within what Geometra supports. That "
+        "question is settled - do not say it cannot be measured. Anything else they "
+        "mention - a mirror on the wall, a pet beside it, a staircase next to it - is "
+        "scenery in their photo, not what they asked about.\n" if known_measurable else ""
+    )
+    measurable_retry_note = (
+        "\nNOTE: your previous attempt said this could not be measured. That is wrong "
+        "and not available on this turn - the capability check is authoritative here. "
+        "Answer how to measure what they asked about.\n" if measurable_retry else ""
+    )
     user_message = (
-        f"{prefix}Customer's likely intent: {intent}\n{retry_note}{answer_now_note}{clarify_cap_note}"
+        f"{prefix}Customer's likely intent: {intent}\n{retry_note}{answer_now_note}"
+        f"{measurable_note}{measurable_retry_note}{clarify_cap_note}"
         f"{cap_retry_note}\nCONTEXT:\n{context}\n\nCUSTOMER QUESTION: {original_query}"
     )
     response, _, _ = call_llm(ANSWER_PROMPT, user_message)
@@ -1772,8 +1790,13 @@ def _resolve_turn(query, history, awaiting):
     # See llm/measurability.py. Called inline here rather than concurrently -
     # this harness is for reading behaviour, not for timing; the real pipeline
     # in llm/two_pass.py overlaps it with Pass 1 and retrieval.
+    # Set before the gate, because the classifier only runs on some turns while the flag
+    # is read on every one.
+    classifier_says_measurable = False
     if _is_measurability_question(query):
         verdict = classify_measurability(query)
+        # "measurable" is as much a decision as an exclusion, and used to be discarded.
+        classifier_says_measurable = verdict == "measurable"
         if verdict == "effigy":
             return MANNEQUIN_EXCLUSION_MESSAGE, None
         if verdict not in (None, "measurable", "unclear"):
@@ -1802,10 +1825,25 @@ def _resolve_turn(query, history, awaiting):
     # Pass 2 toward hedging or a wrong answer instead of trusting the intent. Passing the
     # reformulated, self-contained query instead fixes that; for a fresh, already-clear
     # question Pass 1 just restates it cleanly anyway, so this is a no-op there.
-    response = answer_pass(reformulated_query, intent, chunks, confidence, already_clarified=already_clarified)
+    response = answer_pass(reformulated_query, intent, chunks, confidence,
+                           already_clarified=already_clarified,
+                           known_measurable=classifier_says_measurable)
     if has_hedge(response):
-        response = answer_pass(reformulated_query, intent, chunks, confidence, hedge_retry=True, already_clarified=already_clarified)
+        response = answer_pass(reformulated_query, intent, chunks, confidence,
+                               hedge_retry=True, already_clarified=already_clarified,
+                               known_measurable=classifier_says_measurable)
         # accepted as-is even if the retry still hedges (one retry only, per spec)
+
+    # Mirrored from llm/two_pass.py: the capability verdict is authoritative, so an answer
+    # that contradicts it is wrong. An instruction alone did not hold - measured, Pass 2
+    # still refused on roughly one turn in six with the note present - so the answer is
+    # checked and asked again once, the same produce-check-retry shape as the clarify
+    # caps. Only reachable when the verdict was "measurable", so it cannot soften a real
+    # exclusion.
+    if classifier_says_measurable and refuses_the_subject(response):
+        response = answer_pass(reformulated_query, intent, chunks, confidence,
+                               already_clarified=already_clarified,
+                               known_measurable=True, measurable_retry=True)
 
     stripped = response.strip()
     if "[REFUSE]" in stripped:

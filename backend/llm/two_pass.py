@@ -1041,10 +1041,30 @@ _AFFIRM_RE = re.compile(
 )
 
 
+# Sentence end: a period, question mark or exclamation followed by whitespace. Good
+# enough for this - the replies in question open with a short verdict sentence.
+_FIRST_SENTENCE_RE = re.compile(r"^.*?[.!?](?=\s|$)", re.DOTALL)
+
+
 def refuses_the_subject(text: str) -> bool:
-    opening = text[:140]
-    denied = bool(_DENIAL_RE.search(opening)) or opening.lstrip().lower().startswith("no,")
-    return denied and not _AFFIRM_RE.search(text)
+    """Does this reply refuse the thing the customer asked about?
+
+    Judged on the FIRST SENTENCE only. Scanning the whole reply for an affirmative was
+    measured wrong in production: "No, Geometra cannot measure a staircase wall. ... the
+    wall next to it can be measured" was read as not-a-refusal, because an aside about a
+    different wall cancelled the verdict. English puts the verdict in the opening
+    sentence, and a genuine "no, but" keeps both halves in that same sentence.
+    """
+    if not text:
+        return False
+    stripped = text.strip()
+    match = _FIRST_SENTENCE_RE.match(stripped)
+    first = match.group(0) if match else stripped
+    denied = bool(_DENIAL_RE.search(first)) or first.lstrip().lower().startswith("no,")
+    if not denied:
+        return False
+    # A "cannot X, but you can Y" in the SAME sentence is an answer, not a refusal.
+    return not _AFFIRM_RE.search(first)
 
 
 def clean_leaked_artifacts(text: str) -> str:
