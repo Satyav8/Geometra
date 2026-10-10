@@ -11,6 +11,28 @@ load_dotenv(override=True)
 # unset on a laptop and in CI, so neither is affected.
 APP_ENV = os.getenv("APP_ENV", "development")
 
+# The commit this process is running, so "which build is live?" is one request instead of
+# a forensic dig through logs. Render sets RENDER_GIT_COMMIT on every deploy; locally we
+# read git HEAD; if neither works we say so rather than guessing.
+def _build_version() -> str:
+    render_commit = os.getenv("RENDER_GIT_COMMIT", "")
+    if render_commit:
+        return render_commit[:7]
+    try:
+        head = os.path.join(os.path.dirname(__file__), "..", ".git", "HEAD")
+        with open(head, "r", encoding="utf-8") as f:
+            ref = f.read().strip()
+        if ref.startswith("ref: "):
+            ref_path = os.path.join(os.path.dirname(head), ref[5:])
+            with open(ref_path, "r", encoding="utf-8") as f:
+                return f.read().strip()[:7]
+        return ref[:7]
+    except OSError:
+        return "unknown"
+
+
+BUILD_VERSION = _build_version()
+
 # LLM
 LLM_PROVIDER = os.getenv("LLM_PROVIDER", "groq")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")

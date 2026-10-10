@@ -21,6 +21,7 @@ from llm.moderation import is_flagged_by_moderation
 from llm.measurability import classify_measurability, reason_for
 from llm.printer_classifier import classify_printer_type
 from llm.translation import is_non_latin_script, localize, needs_translation, to_english
+from llm.source_labels import strip_source_labels
 from llm.multilingual_profanity import (
     ALL_TERMS as MULTILINGUAL_PROFANITY_TERMS,
     contains_native_script_profanity,
@@ -1375,7 +1376,7 @@ def answer_pass(original_query, intent, chunks, confidence, hedge_retry=False, a
     # No raw conversation history here, by design - the diagram only feeds history into
     # Pass 1. Pass 2 relies on Pass 1's distilled intent summary instead, so this
     # actually tests whether Pass 1's reformulation carries enough context on its own.
-    context = "\n\n".join(f"[Source: {c.section}]\n{c.text}" for c in chunks)
+    context = "\n\n".join(f"--- FAQ ENTRY ({c.section}) ---\n{c.text}" for c in chunks)
     prefix = "[LOW CONFIDENCE]\n" if confidence == "low" else ""
     retry_note = (
         "\nNOTE: your previous attempt used hedging language (e.g. 'perhaps', 'it seems'). "
@@ -1846,10 +1847,10 @@ def _resolve_turn(query, history, awaiting):
     # customer. Also strips internal rule references (e.g. "using Rule 2B ()") left
     # behind after a tag is removed - a customer should never see either.
     def clean_leaked_artifacts(text):
-        # Internal "[Source: X]" labels must never reach the customer. Rule 4 now
+        # Internal source labels must never reach the customer. Rule 4 now
         # forbids citing, but a prompt rule is an instruction and this is the
         # guarantee (mirrored from llm/two_pass.py per this file's sync convention).
-        text = re.sub(r"\s*\[Source:[^\]]*\]", "", text).strip()
+        text = strip_source_labels(text)
         for tag in ("[CANNOT_ANSWER]", "[CLARIFY]"):
             if tag in text:
                 text = text.replace(tag, "").strip()
