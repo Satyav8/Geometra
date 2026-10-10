@@ -1023,6 +1023,30 @@ def is_bare_negation(text: str) -> bool:
 # otherwise-fine answer, including a plain-prose one caught by looks_like_clarify_question()
 # rather than the tagged branch. Also strips internal rule references (e.g. "using Rule 2B
 # ()") left behind after a tag is removed - a customer should never see either.
+# Does this reply refuse the thing the customer asked about?
+#
+# Deliberately not "does it contain 'cannot measure'" - that flagged "Geometra cannot
+# measure the staircase itself, but you can measure the wall next to it", which is a
+# correct and useful answer. A refusal denies UP FRONT and never affirms: the denial is in
+# the opening sentence and nothing later says the thing can be measured.
+_DENIAL_RE = re.compile(
+    r"\b(?:cannot measure|can't measure|can not measure|isn't able to measure|"
+    r"is not able to measure|unable to measure|not measurable)\b",
+    re.IGNORECASE,
+)
+_AFFIRM_RE = re.compile(
+    r"\b(?:you can measure|you can still measure|yes,? you can|can be measured|"
+    r"you may measure|it is measurable)\b",
+    re.IGNORECASE,
+)
+
+
+def refuses_the_subject(text: str) -> bool:
+    opening = text[:140]
+    denied = bool(_DENIAL_RE.search(opening)) or opening.lstrip().lower().startswith("no,")
+    return denied and not _AFFIRM_RE.search(text)
+
+
 def clean_leaked_artifacts(text: str) -> str:
     # Citations are an internal device: the CONTEXT chunks carry "[Source: X]" labels
     # so the model can tell them apart, and Rule 4 forbids repeating them to the
@@ -1072,6 +1096,8 @@ def answer_pass(
     already_clarified: bool = False,
     cap_retry: bool = False,
     answer_now_retry: bool = False,
+    known_measurable: bool = False,
+    measurable_retry: bool = False,
 ):
     # No raw conversation history here, by design - Pass 2 relies on Pass 1's distilled
     # intent summary instead of raw history.
@@ -1131,9 +1157,45 @@ def answer_pass(
         "clarifying question if their message genuinely does not say what they are asking "
         "about at all.\n" if answer_now_retry else ""
     )
+    # The capability question is already decided by llm/measurability.py, in isolation,
+    # where it was measured as reliable. Without this note Pass 2 re-litigates it and
+    # sometimes refuses anyway: "there is a mirror on the wall, can I measure the wall"
+    # came back as "No, Geometra cannot measure a wall that has a mirror on it" in
+    # production on 2026-10-10, while the classifier had correctly said measurable.
+    #
+    # Phrased as a settled fact rather than a prohibition, for the same reason the
+    # cap_retry note is: telling the model what is true works where telling it what not
+    # to say does not.
+    measurable_note = (
+        "\nNOTE: a separate capability check has already confirmed that the thing this "
+        "customer is asking to measure IS within what Geometra supports. That question is "
+        "settled - do not say it cannot be measured, and do not refuse on measurement-scope "
+        "grounds. If their message also mentions something Geometra cannot measure (a "
+        "mirror on the wall, a pet beside it, objects in front of it), that thing is "
+        "scenery in their photo, not what they asked about. Answer how to measure what "
+        "they DID ask about, and if the other object affects the photo - blocking a "
+        "corner, causing glare - say how to work around it.\n"
+        'Worked example: "can I measure the wall next to the staircase" - the subject '
+        "is the WALL, which Geometra measures; the staircase is simply near it and is "
+        "not what was asked about. A compliant answer explains how to measure that "
+        'wall. "No, Geometra cannot measure walls next to staircases" is NOT '
+        "compliant - it refuses a wall because of something standing beside it. The "
+        'same applies to "behind", "beside", "in front of" and "with X on it".\n'
+        if known_measurable else ""
+    )
+    measurable_retry_note = (
+        "\nNOTE: your previous attempt said this could not be measured. That is wrong "
+        "and is not available on this turn - a capability check has already confirmed "
+        "the thing being asked about IS measurable, and that check is authoritative "
+        "here. Something else named in their message may well be unmeasurable, but it "
+        "is not what they asked about; it is just in the room. Answer how to measure "
+        "what they asked about, and mention the other object only as something to work "
+        "around in the photo.\n" if measurable_retry else ""
+    )
     user_message = build_two_pass_answer_message(
         original_query, intent, chunks, confidence,
-        retry_note=retry_note + answer_now_note, clarify_cap_note=clarify_cap_note,
+        retry_note=retry_note + answer_now_note + measurable_note + measurable_retry_note,
+        clarify_cap_note=clarify_cap_note,
         cap_retry_note=cap_retry_note,
     )
     response, input_tokens, output_tokens = call_llm(TWO_PASS_ANSWER_PROMPT, user_message)
@@ -1685,6 +1747,9 @@ def _resolve_turn(
     # Joined after moderation, so an abusive message still gets the safety refusal rather
     # than a scope answer, and before Pass 2, which this replaces when it has a verdict.
     verdict = _measurability_verdict(measurability)
+    # A "measurable" verdict is as much a decision as an exclusion, and used to be
+    # discarded - see the measurable_note in answer_pass() for what that cost.
+    classifier_says_measurable = verdict == "measurable"
     if verdict == "effigy":
         return _short_circuit(MANNEQUIN_EXCLUSION_MESSAGE)
     if verdict:
@@ -1713,16 +1778,36 @@ def _resolve_turn(
     # Pass 2 toward hedging or a wrong answer instead of trusting the intent. Passing the
     # reformulated, self-contained query instead fixes that; for a fresh, already-clear
     # question Pass 1 just restates it cleanly anyway, so this is a no-op there.
-    response, a_in_tok, a_out_tok = answer_pass(reformulated_query, intent, chunks, confidence, already_clarified=already_clarified)
+    response, a_in_tok, a_out_tok = answer_pass(
+        reformulated_query, intent, chunks, confidence,
+        already_clarified=already_clarified, known_measurable=classifier_says_measurable,
+    )
     total_in = u_in_tok + a_in_tok
     total_out = u_out_tok + a_out_tok
     if has_hedge(response):
         response, r_in_tok, r_out_tok = answer_pass(
-            reformulated_query, intent, chunks, confidence, hedge_retry=True, already_clarified=already_clarified
+            reformulated_query, intent, chunks, confidence, hedge_retry=True,
+            already_clarified=already_clarified, known_measurable=classifier_says_measurable,
         )
         total_in += r_in_tok
         total_out += r_out_tok
         # accepted as-is even if the retry still hedges (one retry only, per spec)
+
+    # The capability verdict is authoritative, so an answer that contradicts it is simply
+    # wrong - and measured, Pass 2 still does this on roughly one turn in six even with
+    # the note present. Same produce-check-retry shape as the clarification caps above,
+    # for the same reason: an instruction alone did not hold. Only reachable when the
+    # classifier said "measurable", so it cannot soften a real exclusion.
+    if classifier_says_measurable and refuses_the_subject(response):
+        response, m_in_tok, m_out_tok = answer_pass(
+            reformulated_query, intent, chunks, confidence,
+            already_clarified=already_clarified, known_measurable=True,
+            measurable_retry=True,
+        )
+        total_in += m_in_tok
+        total_out += m_out_tok
+        # Accepted as-is if it still refuses - one retry only, matching every other
+        # retry in this function.
 
     # Keep the ORIGINAL opening question (and its similarity score) held across a
     # continuing thread, rather than overwriting it with the customer's latest reply on
