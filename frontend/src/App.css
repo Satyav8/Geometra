@@ -130,50 +130,6 @@ body {
   background: #33dbff;
 }
 
-.source-citation {
-  margin-top: 8px;
-  font-size: 0.8rem;
-}
-
-.source-toggle {
-  background: none;
-  border: none;
-  color: #0090b0;
-  cursor: pointer;
-  padding: 0;
-  font-size: 0.8rem;
-}
-
-.source-list {
-  list-style: none;
-  margin: 6px 0 0 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.source-item {
-  background: rgba(238, 242, 246, 0.85);
-  border: 1px solid #d6e0ea;
-  border-radius: 6px;
-  padding: 6px 8px;
-}
-
-.source-section {
-  font-weight: 600;
-  color: #1b2a41;
-}
-
-.source-score {
-  color: #5b6b82;
-}
-
-.source-preview {
-  margin-top: 2px;
-  color: #3d4c60;
-}
-
 .typing-indicator {
   display: flex;
   gap: 4px;
