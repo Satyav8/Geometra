@@ -31,7 +31,6 @@ export default function ChatWindow() {
         {
           role: "bot",
           text: data.response,
-          sources: data.sources,
           confidence_level: data.confidence_level,
           is_unknown_question: data.is_unknown_question,
           support_email: data.support_email,
@@ -44,7 +43,6 @@ export default function ChatWindow() {
         {
           role: "bot",
           text: "Something went wrong reaching the Geometra support backend. Please try again.",
-          sources: [],
           confidence_level: "unknown",
           is_unknown_question: false,
         },
