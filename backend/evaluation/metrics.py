@@ -20,9 +20,11 @@ from config import (
 from database import count_session_messages, get_message_by_id, get_session_message_flags
 from llm.guardrails import BANNED_PHRASES, _extract_numbers
 from llm.two_pass import looks_like_clarify_question
+from llm.source_labels import find_source_label
 from models import EvaluationResult, SourceChunk
 
-CITATION_RE = re.compile(r"\[Source:\s*([^\]]+)\]")
+# Citation detection lives in llm/source_labels.py so the strip, this metric and
+# the tests cannot drift apart - they did, and that is why a leak went unlogged.
 
 # Two-pass flow messages that carry no factual claims of their own (fixed text, or a
 # clarifying/ticket-offer question) - added alongside the original FALLBACK_MESSAGE/
@@ -121,10 +123,10 @@ def citation_not_leaked(response: str, chunks: List[SourceChunk]) -> EvaluationR
     still labelled "[Source: X]" internally, so a citation leaking into a reply is a real
     regression - and this catches it in production logging rather than in a screenshot.
     """
-    match = CITATION_RE.search(response)
-    if match:
+    found = find_source_label(response)
+    if found:
         return _result("citation_not_leaked", False, None,
-                       f"Internal source label leaked to the customer: [Source: {match.group(1)}]")
+                       f"Internal source label leaked to the customer: {found}")
     return _result("citation_not_leaked", True, None, "No internal source label in the response")
 
 

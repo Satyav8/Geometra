@@ -4,7 +4,7 @@ from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 
-from config import APP_ENV, CORS_ORIGINS, DATABASE_BACKEND, VECTOR_DB_BACKEND
+from config import APP_ENV, BUILD_VERSION, CORS_ORIGINS, DATABASE_BACKEND, VECTOR_DB_BACKEND
 from database import init_db, check_health
 from rag import vectorstore
 from rate_limiter import limiter
@@ -43,6 +43,8 @@ def startup():
     # conversation to a SQLite file that dies with the container. Raising here stops
     # uvicorn from serving at all, which turns a silent data-loss bug into an obvious
     # failed deploy.
+    print(f"[startup] build {BUILD_VERSION}, env {APP_ENV}, "
+          f"db {DATABASE_BACKEND}, vectors {VECTOR_DB_BACKEND}")
     validate_configuration(APP_ENV)
     init_db()
 
@@ -54,6 +56,12 @@ def health():
 
     return {
         "status": "ok",
+        # Which commit is answering. Added 2026-10-10 after replies carrying source
+        # citations turned out to come from a build that predated the fix, while the
+        # dashboard showed the fixed build as live - a disagreement that took a forensic
+        # correlation of metric names against message ids to establish.
+        "version": BUILD_VERSION,
+        "app_env": APP_ENV,
         "database": db_status,
         "database_backend": DATABASE_BACKEND,
         "vector_db": vector_status,

@@ -25,6 +25,7 @@ from integrations.resend_client import send_ticket_email
 from integrations.supabase_client import write_escalated_question
 from llm.two_pass import process_turn
 from llm.translation import localize, needs_translation
+from llm.source_labels import strip_source_labels
 from models import ChatRequest, ChatResponse, SourceChunk
 from rag.relevance import compute_criticality
 from rag.spelling import correct_query
@@ -140,6 +141,14 @@ def chat(request: Request, chat_request: ChatRequest, background_tasks: Backgrou
     is_check_in_turn = chat_request.turn_number == ESCALATION_TURN_THRESHOLD and not result.skip_check_in
     if is_check_in_turn:
         response = response + CHECK_IN_MESSAGE
+
+    # The last thing that happens to the text before it is stored and returned.
+    # Pass 2 already strips citations, but three things are composed AFTER that:
+    # the ticket confirmation (needs a ticket number that only exists here), the
+    # localized rewrite of a canned reply for a non-English customer, and the
+    # check-in append. Stripping here means no path can route around it, which is
+    # the property that was missing when this kept coming back.
+    response = strip_source_labels(response)
 
     support_email = SUPPORT_EMAIL if (is_unknown_question or is_check_in_turn) else None
 
