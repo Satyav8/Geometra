@@ -59,7 +59,13 @@ from models import SourceChunk
 from rag.relevance import is_gratitude, is_greeting, is_query_relevant
 from rag.retriever import retrieve_combined
 from rag.spelling import correct_query, has_no_correction_candidates, is_dictionary_word
-from llm.translation import is_non_latin_script, localize, needs_translation, to_english
+from llm.language import (
+    answer_language_instruction,
+    identify,
+    is_non_latin_script,
+    needs_translation as language_needs_translation,
+)
+from llm.translation import localize, to_english
 from llm.source_labels import strip_source_labels
 
 
@@ -1118,6 +1124,7 @@ def answer_pass(
     answer_now_retry: bool = False,
     known_measurable: bool = False,
     measurable_retry: bool = False,
+    language_note: str = "",
 ):
     # No raw conversation history here, by design - Pass 2 relies on Pass 1's distilled
     # intent summary instead of raw history.
@@ -1214,7 +1221,8 @@ def answer_pass(
     )
     user_message = build_two_pass_answer_message(
         original_query, intent, chunks, confidence,
-        retry_note=retry_note + answer_now_note + measurable_note + measurable_retry_note,
+        retry_note=(retry_note + answer_now_note + measurable_note
+                    + measurable_retry_note + language_note),
         clarify_cap_note=clarify_cap_note,
         cap_retry_note=cap_retry_note,
     )
@@ -1558,9 +1566,13 @@ def process_turn(
     Both steps fail open: no translation means the turn runs exactly as it does today.
     """
     probe, customer_language = raw_query, None
-    # Detection and translation both read the raw text - see _ENGLISH_WORD_RATIO for why
-    # the typo-corrected text is the wrong input here.
-    if needs_translation(raw_query):
+    # Identified ONCE here and passed down, rather than each layer deciding for itself.
+    # Two layers guessing separately is how they came to disagree - the translation layer
+    # calling a message non-English while Pass 2 answered it in English.
+    language = identify(raw_query)
+    # What Pass 2 must answer in. None for English, which leaves the prompt untouched.
+    language_note = answer_language_instruction(language) or ""
+    if language_needs_translation(language):
         english = to_english(raw_query)
         if english:
             probe, customer_language = english, raw_query
@@ -1574,6 +1586,7 @@ def process_turn(
     result = _resolve_turn(
         query, raw_query, probe, history, awaiting,
         existing_pending_query, existing_pending_similarity,
+        language_note=language_note,
     )
 
     if customer_language is None or not result.canned or not result.response.strip():
@@ -1589,6 +1602,7 @@ def _resolve_turn(
     awaiting: Optional[str],
     existing_pending_query: Optional[str] = None,
     existing_pending_similarity: Optional[float] = None,
+    language_note: str = "",
 ) -> TurnResult:
     """query: typo-corrected text (drives retrieval/relevance/the LLM prompt).
     probe: the English view of the message that every business rule below reads. Equal to
@@ -1801,6 +1815,7 @@ def _resolve_turn(
     response, a_in_tok, a_out_tok = answer_pass(
         reformulated_query, intent, chunks, confidence,
         already_clarified=already_clarified, known_measurable=classifier_says_measurable,
+        language_note=language_note,
     )
     total_in = u_in_tok + a_in_tok
     total_out = u_out_tok + a_out_tok
@@ -1808,6 +1823,7 @@ def _resolve_turn(
         response, r_in_tok, r_out_tok = answer_pass(
             reformulated_query, intent, chunks, confidence, hedge_retry=True,
             already_clarified=already_clarified, known_measurable=classifier_says_measurable,
+            language_note=language_note,
         )
         total_in += r_in_tok
         total_out += r_out_tok

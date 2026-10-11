@@ -119,19 +119,19 @@ def _is_english_word(word: str) -> bool:
 def needs_translation(text: str) -> bool:
     """True when the English business rules cannot be expected to read this message.
 
-    Free and local - no LLM call. Deliberately biased towards saying no: a miss costs
-    nothing that isn't already being paid today, while a false yes spends a call.
+    Delegates to llm/language.py. This used to be a dictionary-word ratio computed here,
+    and it broke in production on 2026-10-11: "Can i meausre humayun's tomb" has a typo
+    and a proper noun, which was two unknown words out of four - enough to call a plain
+    English question foreign and answer it in Hinglish.
+
+    Measured, no threshold fixes that. Short Hinglish and typo-heavy English are
+    indistinguishable to a dictionary, and the spellchecker cannot separate them either
+    (it maps "kahan"->"khan" and "maap"->"map" as readily as "meausre"->"measure"). See
+    llm/language.py for the measurements and for why it is a classifier now.
     """
-    if is_non_latin_script(text):
-        return True
-    words = [w for w in _WORD_RE.findall(text) if len(w) > 1]
-    if len(words) < _MIN_WORDS_FOR_RATIO:
-        return False
-    non_english = [w for w in words if not _is_english_word(w)]
-    if len(non_english) < _MIN_NON_ENGLISH_WORDS:
-        return False
-    english = len(words) - len(non_english)
-    return english / len(words) < _ENGLISH_WORD_RATIO
+    from llm.language import identify, needs_translation as _needs
+
+    return _needs(identify(text))
 
 
 _TO_ENGLISH_PROMPT = """You translate a customer support message into English.

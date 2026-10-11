@@ -20,7 +20,13 @@ from llm.client import call_llm
 from llm.moderation import is_flagged_by_moderation
 from llm.measurability import classify_measurability, reason_for
 from llm.printer_classifier import classify_printer_type
-from llm.translation import is_non_latin_script, localize, needs_translation, to_english
+from llm.language import (
+    answer_language_instruction,
+    identify,
+    is_non_latin_script,
+    needs_translation as language_needs_translation,
+)
+from llm.translation import localize, to_english
 from llm.source_labels import strip_source_labels
 from llm.two_pass import refuses_the_subject
 from llm.multilingual_profanity import (
@@ -1374,7 +1380,7 @@ def understand(query, history):
 
 
 def answer_pass(original_query, intent, chunks, confidence, hedge_retry=False, already_clarified=False, cap_retry=False, answer_now_retry=False,
-                known_measurable=False, measurable_retry=False):
+                known_measurable=False, measurable_retry=False, language_note=""):
     # No raw conversation history here, by design - the diagram only feeds history into
     # Pass 1. Pass 2 relies on Pass 1's distilled intent summary instead, so this
     # actually tests whether Pass 1's reformulation carries enough context on its own.
@@ -1453,7 +1459,7 @@ def answer_pass(original_query, intent, chunks, confidence, hedge_retry=False, a
     )
     user_message = (
         f"{prefix}Customer's likely intent: {intent}\n{retry_note}{answer_now_note}"
-        f"{measurable_note}{measurable_retry_note}{clarify_cap_note}"
+        f"{measurable_note}{measurable_retry_note}{language_note}{clarify_cap_note}"
         f"{cap_retry_note}\nCONTEXT:\n{context}\n\nCUSTOMER QUESTION: {original_query}"
     )
     response, _, _ = call_llm(ANSWER_PROMPT, user_message)
@@ -1590,13 +1596,21 @@ def _is_measurability_question(text: str) -> bool:
 
 def process_turn(query, history, awaiting):
     """Returns (response_text, new_awaiting_state)."""
-    response, new_awaiting = _resolve_turn(query, history, awaiting)
-    if needs_translation(query) and response.strip() and not needs_translation(response):
+    # Identified ONCE. This used to call needs_translation() twice per turn - on the
+    # question and again on the reply - which with a classifier behind it is two calls
+    # for one decision.
+    language = identify(query)
+    response, new_awaiting = _resolve_turn(
+        query, history, awaiting,
+        language_note=answer_language_instruction(language) or "",
+    )
+    if (language_needs_translation(language) and response.strip()
+            and not language_needs_translation(identify(response))):
         response = localize(response, query)
     return response, new_awaiting
 
 
-def _resolve_turn(query, history, awaiting):
+def _resolve_turn(query, history, awaiting, language_note=""):
     """Returns (response_text, new_awaiting_state)."""
     TICKET_RAISED_MESSAGE = "[TEST] Ticket would be raised here — last 3 turns emailed via Resend."
 
@@ -1629,7 +1643,7 @@ def _resolve_turn(query, history, awaiting):
     # and gets localized. Same outcome, and no extra call when Pass 2 already answered in
     # the customer's language.
     original = query
-    if needs_translation(original):
+    if language_needs_translation(identify(original)):
         english = to_english(original)
         if english:
             query = english
@@ -1827,11 +1841,13 @@ def _resolve_turn(query, history, awaiting):
     # question Pass 1 just restates it cleanly anyway, so this is a no-op there.
     response = answer_pass(reformulated_query, intent, chunks, confidence,
                            already_clarified=already_clarified,
-                           known_measurable=classifier_says_measurable)
+                           known_measurable=classifier_says_measurable,
+                           language_note=language_note)
     if has_hedge(response):
         response = answer_pass(reformulated_query, intent, chunks, confidence,
                                hedge_retry=True, already_clarified=already_clarified,
-                               known_measurable=classifier_says_measurable)
+                               known_measurable=classifier_says_measurable,
+                               language_note=language_note)
         # accepted as-is even if the retry still hedges (one retry only, per spec)
 
     # Mirrored from llm/two_pass.py: the capability verdict is authoritative, so an answer
