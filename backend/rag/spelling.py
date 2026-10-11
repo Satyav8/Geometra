@@ -58,11 +58,22 @@ def correct_query(text: str) -> str:
     # Skipped only when the message isn't entirely uppercase, so a customer typing in
     # caps ("HOW DO I MEASRUE A WALL") still gets their genuine typos corrected.
     shouting = text.isupper()
+
     def _is_product_identifier(token: str) -> bool:
         return not shouting and any(c.isupper() for c in token[1:])
 
     tokens = _TOKEN_RE.findall(text)
+
+    # A leading capital anywhere but the first word is a name, a place or a brand, not a
+    # misspelling. Same evidence as the internal-capitals rule above, and the same class
+    # of damage when ignored: "Rajesh" was answered about as "Radish", "Godrej" as
+    # "Gore". The first token is excluded because every sentence starts with a capital,
+    # so a genuine typo there must still be corrected.
+    def _is_proper_noun(index: int, token: str) -> bool:
+        return not shouting and index > 0 and token[:1].isupper()
+
     protected = {t.lower() for t in tokens if _is_product_identifier(t)}
+    protected |= {t.lower() for i, t in enumerate(tokens) if _is_proper_noun(i, t)}
     candidates = {
         t.lower() for t in tokens
         if len(t) >= MIN_LENGTH_TO_CORRECT and t.lower() not in protected
@@ -81,6 +92,14 @@ def correct_query(text: str) -> str:
             continue
         suggestion = _spell.correction(lower)
         if not suggestion or suggestion == lower:
+            continue
+        # Only accept a correction one edit away. A real typo is one slip - "meausre" ->
+        # "measure", "warrenty" -> "warranty". Two edits away is usually a DIFFERENT word,
+        # and that is where this hurt customers: "humayun" -> "human" turned a question
+        # about a monument into one Pass 2 refused as being about human remains;
+        # "Godrej" -> "gore"; "almari" -> "alarm". Rejecting distance 2 keeps the
+        # corrections that work and drops the ones that invent meaning.
+        if suggestion not in _spell.edit_distance_1(lower):
             continue
         replacement = suggestion.capitalize() if word[:1].isupper() else suggestion
         corrected = re.sub(rf"\b{re.escape(word)}\b", replacement, corrected, count=1)

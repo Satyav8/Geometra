@@ -1565,7 +1565,12 @@ def process_turn(
 
     Both steps fail open: no translation means the turn runs exactly as it does today.
     """
-    probe, customer_language = raw_query, None
+    # The business rules match literal words, so they read the TYPO-CORRECTED text on an
+    # English turn: "Can i meausre humayun's tomb" has no word "measure" in it, so every
+    # deterministic layer missed it and Pass 2 answered instead - refusing it, because the
+    # spellchecker had turned "humayun" into "human". Safety still reads raw_query inside
+    # _resolve_turn, so no correction can weaken it.
+    probe, customer_language = query, None
     # Identified ONCE here and passed down, rather than each layer deciding for itself.
     # Two layers guessing separately is how they came to disagree - the translation layer
     # calling a message non-English while Pass 2 answered it in English.
@@ -1587,6 +1592,7 @@ def process_turn(
         query, raw_query, probe, history, awaiting,
         existing_pending_query, existing_pending_similarity,
         language_note=language_note,
+        translated=customer_language is not None,
     )
 
     if customer_language is None or not result.canned or not result.response.strip():
@@ -1603,6 +1609,7 @@ def _resolve_turn(
     existing_pending_query: Optional[str] = None,
     existing_pending_similarity: Optional[float] = None,
     language_note: str = "",
+    translated: bool = False,
 ) -> TurnResult:
     """query: typo-corrected text (drives retrieval/relevance/the LLM prompt).
     probe: the English view of the message that every business rule below reads. Equal to
@@ -1769,7 +1776,7 @@ def _resolve_turn(
     # Known limit: on a multi-turn non-English conversation this loses Pass 1's pronoun
     # resolution, since the probe is a translation of this turn alone. Retrieval on the
     # right language for a slightly less resolved question beats the reverse.
-    chunks, confidence = retrieve_combined(probe if probe != raw_query else reformulated_query)
+    chunks, confidence = retrieve_combined(probe if translated else reformulated_query)
 
     # Moderation was started before any of the work above and has been running alongside
     # it - joined here, before a single word is composed for the customer, so it still
