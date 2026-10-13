@@ -112,6 +112,51 @@ def _production_problems() -> List[str]:
     return problems
 
 
+
+# Production-only resources. A process that is not production has no business writing to
+# any of these: real customer conversations, the live FAQ index, and an email sender that
+# reaches real inboxes.
+_PRODUCTION_RESOURCES = (
+    ("DATABASE_BACKEND", "supabase",
+     "your test conversations would be written into the live customer database, where "
+     "they corrupt the metrics and are indistinguishable from real traffic"),
+    ("VECTOR_DB_BACKEND", "qdrant",
+     "an ingest from this process would overwrite the live FAQ index that production "
+     "serves from"),
+)
+
+
+def _local_pointing_at_production_problems() -> List[str]:
+    """Problems for a NON-production process configured against production resources.
+
+    The mirror of _production_problems(). That one stops production starting with
+    throwaway backends; this stops a laptop starting with the real ones.
+
+    Opt out with ALLOW_PRODUCTION_BACKENDS=1 when it is genuinely wanted - the point is
+    that it becomes a decision someone made, not something they did not notice.
+    """
+    import os
+
+    if os.getenv("ALLOW_PRODUCTION_BACKENDS", "").lower() in ("1", "true", "yes"):
+        return []
+
+    problems = []
+    for setting, production_value, why in _PRODUCTION_RESOURCES:
+        if getattr(config, setting) == production_value:
+            problems.append(
+                f"APP_ENV={config.APP_ENV!r} (not production) but {setting}="
+                f"{production_value!r} - {why}. Use the defaults in .env.example for "
+                f"local work, or set ALLOW_PRODUCTION_BACKENDS=1 if you really mean it."
+            )
+    if config.RESEND_API_KEY:
+        problems.append(
+            f"APP_ENV={config.APP_ENV!r} (not production) but RESEND_API_KEY is set - a "
+            "test ticket would email the real support inbox. Leave it empty locally, or "
+            "set ALLOW_PRODUCTION_BACKENDS=1 if you really mean it."
+        )
+    return problems
+
+
 def validate_configuration(app_env: str) -> None:
     """Raises ConfigurationError listing everything wrong, rather than the first thing.
 
@@ -121,6 +166,10 @@ def validate_configuration(app_env: str) -> None:
     problems = _consistency_problems()
     if app_env == "production":
         problems += _production_problems()
+    else:
+        # The mirror check: a laptop must not quietly write to production. See
+        # _local_pointing_at_production_problems() for the two incidents behind this.
+        problems += _local_pointing_at_production_problems()
 
     if problems:
         lines = "\n".join(f"  - {p}" for p in problems)
