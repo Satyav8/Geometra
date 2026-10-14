@@ -4,6 +4,9 @@
 # committable, holding four live secrets.
 .env*
 !.env.example
+# The Docker handover template. Same shape as .env.example, so the .env* rule
+# above swallowed it - and a template nobody can clone is worth nothing.
+!.env.production.example
 __pycache__/
 *.pyc
 venv/
