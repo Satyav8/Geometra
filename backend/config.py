@@ -15,6 +15,14 @@ APP_ENV = os.getenv("APP_ENV", "development")
 # a forensic dig through logs. Render sets RENDER_GIT_COMMIT on every deploy; locally we
 # read git HEAD; if neither works we say so rather than guessing.
 def _build_version() -> str:
+    # Set explicitly by the Docker image, which has neither of the two sources below:
+    # RENDER_GIT_COMMIT exists only on Render, and .git/ is excluded from the build
+    # context. Without this a container reports version "unknown" on /health - useless in
+    # exactly the situation the marker was added for, which was telling two builds apart.
+    explicit = os.getenv("BUILD_VERSION", "")
+    if explicit:
+        return explicit.strip()[:20]
+
     render_commit = os.getenv("RENDER_GIT_COMMIT", "")
     if render_commit:
         return render_commit[:7]

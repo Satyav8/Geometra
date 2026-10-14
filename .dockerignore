@@ -1,0 +1,52 @@
+# Build context is the repository root. Everything listed here either bloats the image,
+# breaks it, or is a secret.
+
+# The two big ones. backend/venv is several hundred MB of Windows-built packages that
+# would be useless in a Linux container and would shadow the ones pip installs;
+# frontend/node_modules is not in the image at all (the frontend deploys separately as a
+# static site) and would otherwise be copied for nothing.
+**/venv/
+**/.venv/
+**/node_modules/
+
+__pycache__/
+**/__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Secrets never go in an image. They arrive as environment variables at run time.
+.env
+.env.*
+!.env.example
+!.env.production.example
+
+# Local-only databases. Production uses Supabase and Qdrant; shipping these would mean
+# baking stale conversation data into the image.
+*.db
+*.sqlite
+*.sqlite3
+backend/data/chroma_db/
+
+# Not part of the service. The frontend is deployed separately as a static site; the
+# tests, the evaluation harness and the dev-only console are developer tooling.
+frontend/
+tests/
+backend/try_it_yourself.py
+scripts/*.gs
+
+# git metadata. The commit is passed in as the GIT_COMMIT build argument instead - see
+# the Dockerfile - so the history itself has no reason to be in the image.
+.git/
+.github/
+
+# Documents and tooling artefacts
+*.pdf
+*.docx
+*.xlsx
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+.claude/

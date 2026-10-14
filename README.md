@@ -5,6 +5,13 @@ Pre-prototype stack: FastAPI + ChromaDB (local) + SQLite + React + GPT-4o Mini.
 
 See `Geometra_Claude_Code_Spec.docx` (project root, one level up) for the full technical specification.
 
+## Running it the way production runs it
+
+The instructions below set up a **development** environment - SQLite, a local Chroma
+store, local embeddings - which is deliberately not what the live service uses. To run
+the production system, see **[DOCKER.md](DOCKER.md)**: one image, the same start sequence
+as the live deploy, and the handover notes for the accounts it depends on.
+
 ## Backend setup
 
 ```

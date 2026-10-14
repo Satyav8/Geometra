@@ -1,0 +1,50 @@
+# Runs the S.A.M backend the way production runs it.
+#
+#   cp .env.production.example .env.production   # fill in the secrets
+#   GIT_COMMIT=$(git rev-parse --short HEAD) docker compose up --build
+#
+# Only the backend is here, and that is not an omission: the frontend is a Vite static
+# build served separately (it is a bundle of files on a CDN, not a running process), and
+# Qdrant and Supabase are managed services. This compose file therefore contains exactly
+# what production runs as a container, which is the whole service.
+#
+# See DOCKER.md for pointing a local frontend at this container.
+
+services:
+  sam-backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        # Surfaces on GET /health as "version", which is how you tell which build is
+        # answering. Export GIT_COMMIT before `docker compose up` (see above); without it
+        # the image honestly reports "unknown" rather than guessing.
+        GIT_COMMIT: ${GIT_COMMIT:-unknown}
+    image: sam-backend:latest
+
+    # Secrets stay out of this file and out of the image. This path is gitignored.
+    env_file:
+      - .env.production
+
+    ports:
+      - "8000:8000"
+
+    # The container holds no state - conversations go to Supabase, vectors to Qdrant - so
+    # restarting it loses nothing, and an unhandled crash should bring it straight back.
+    restart: unless-stopped
+
+    # The image defines the probe itself (see HEALTHCHECK in the Dockerfile). The generous
+    # start period covers the FAQ ingest that runs before uvicorn binds the port.
+    healthcheck:
+      start_period: 120s
+
+    # The FAQ ingest on boot plus OpenAI embeddings is the memory high-water mark; 512MB
+    # is comfortable, which is why the free Render tier copes. Raise alongside
+    # WEB_CONCURRENCY if you ever run more than one worker.
+    mem_limit: 1g
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

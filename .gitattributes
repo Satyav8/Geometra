@@ -1,0 +1,7 @@
+# The entrypoint is read by the Linux kernel's shebang handling inside the container. A
+# checkout with core.autocrlf=true would give it CRLF endings, and the container would
+# fail to start with "exec /app/docker-entrypoint.sh: no such file or directory" - the
+# kernel having tried to run "/bin/sh\r". The Dockerfile strips CRs as well; this stops
+# them existing in the first place.
+*.sh text eol=lf
+Dockerfile text eol=lf
