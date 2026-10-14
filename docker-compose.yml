@@ -1,14 +1,19 @@
-# Runs the S.A.M backend the way production runs it.
+# The whole chatbot: the API and the chat UI in front of it.
 #
 #   cp .env.production.example .env.production   # fill in the secrets
 #   GIT_COMMIT=$(git rev-parse --short HEAD) docker compose up --build
 #
-# Only the backend is here, and that is not an omission: the frontend is a Vite static
-# build served separately (it is a bundle of files on a CDN, not a running process), and
-# Qdrant and Supabase are managed services. This compose file therefore contains exactly
-# what production runs as a container, which is the whole service.
+# Then open http://localhost:8080 and talk to it.
 #
-# See DOCKER.md for pointing a local frontend at this container.
+# The UI and the API answer on ONE origin: nginx in the frontend container serves the
+# built React app and forwards /chat (and the other API paths) to the backend over the
+# compose network. So the browser never makes a cross-origin request, CORS_ORIGINS never
+# comes into it, and there is nothing to configure to see the thing work. This matters
+# because under APP_ENV=production the backend refuses to start with a localhost entry in
+# CORS_ORIGINS, which ruled out the usual local workaround.
+#
+# Qdrant and Supabase are not here: they are managed services, and pointing at the real
+# ones is what makes this behave like production. See DOCKER.md to stand up your own.
 
 services:
   sam-backend:
@@ -26,6 +31,8 @@ services:
     env_file:
       - .env.production
 
+    # The UI does not use this - it reaches the backend over the compose network by
+    # service name. It is published so you can curl /health and /chat directly.
     ports:
       - "8000:8000"
 
@@ -42,6 +49,30 @@ services:
     # is comfortable, which is why the free Render tier copes. Raise alongside
     # WEB_CONCURRENCY if you ever run more than one worker.
     mem_limit: 1g
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  sam-frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    image: sam-frontend:latest
+
+    # This is the one to open in a browser.
+    ports:
+      - "8080:8080"
+
+    # Waits for the backend to pass its health check rather than just to exist, so the
+    # first thing a person types cannot land on a 502 while the FAQ is still ingesting.
+    depends_on:
+      sam-backend:
+        condition: service_healthy
+
+    restart: unless-stopped
 
     logging:
       driver: json-file

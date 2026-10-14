@@ -1,0 +1,7 @@
+# node_modules is installed inside the image from package-lock.json; copying the host's
+# would be slow, platform-specific and pointless.
+node_modules/
+dist/
+.env
+.env.*
+npm-debug.log*
