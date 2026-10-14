@@ -5,3 +5,9 @@
 # them existing in the first place.
 *.sh text eol=lf
 Dockerfile text eol=lf
+
+# Same reasoning for anything else a Linux container parses. nginx.conf picked up CRLF on
+# the commit that added it, which is how this was noticed: the file is read by nginx
+# inside the image, and a config it half-understands is a worse failure than one it
+# rejects outright.
+*.conf text eol=lf
